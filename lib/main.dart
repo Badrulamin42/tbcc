@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:http/http.dart' as http;
+import 'dart:convert'; // For JSON encoding/decoding
 
 void main() {
   runApp(const MyApp());
 }
+
+bool isLoading = false;
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -27,9 +31,64 @@ class MyHomePage extends StatefulWidget {
   _MyHomePageState createState() => _MyHomePageState();
 }
 
+
+
 class _MyHomePageState extends State<MyHomePage> {
   String selectedAmount = ''; // Store the selected amount as state
+  String? qrCodeImageUrl;
+//api
 
+  Future<void> handleButtonPress({
+    required BuildContext context,
+    required String amount,
+    required String currency,
+    required Function setLoading,
+  }) async {
+
+    String apiUrl = 'https://api.qrserver.com/v1/create-qr-code/?data=$amount&size=150x150';
+
+    try {
+      setLoading(true);
+      // Define the payload
+      final payload = {
+        'amount': amount,
+        'currency': currency,
+
+      };
+      final response = await http.get(Uri.parse(apiUrl));
+      // Make the POST request
+      // final response = await http.get(
+      //   Uri.parse(apiUrl),
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //     // 'Authorization': 'Bearer YOUR_ACCESS_TOKEN', // Replace with your token if needed
+      //   },
+      //   // body: json.encode(payload),
+      // );
+
+      // Handle the response
+      if (response.statusCode == 200) {
+        // final responseData = json.decode(response.body);
+        setState(() {
+          qrCodeImageUrl = apiUrl; // Save the generated QR code URL
+        });
+        // print('Success: $responseData');
+        // Show a success message or handle response data
+      } else {
+        print('Failed: ${response.statusCode}, ${response.body}');
+        // Show an error message or handle the failure
+      }
+    } catch (e) {
+      print('Error: $e');
+      // Show a network error message
+    } finally {
+      // Hide the loading indicator
+      setLoading(false);
+
+      // Show popup after API call
+      showPopup(context);
+    }
+  }
 
   // Function to show modal popup
   void showPopup(BuildContext context) {
@@ -68,7 +127,10 @@ class _MyHomePageState extends State<MyHomePage> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10.0), // Adjust radius here
               ),
-              content: Stack(
+              content: SizedBox(
+                width: 400, // Set a fixed width
+                height: 600, // Set a fixed height
+                 child: Stack(
                 children: [
                   // Positioned title from the top
                   Positioned(
@@ -137,22 +199,27 @@ class _MyHomePageState extends State<MyHomePage> {
                     left: 0,
                     right: 0,
                     child: Padding(
-                      padding: const EdgeInsets.all(16.0), // Adjust the margin around the image
+                      padding: const EdgeInsets.all(5.0), // Adjust the margin around the image
                       child: Align(
                         alignment: Alignment.bottomCenter, // Align the image to the bottom and center
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 10.0), // Extra margin from the bottom if needed
-                          child: Image.asset(
+                          child:
+                          qrCodeImageUrl != null
+                              ? Image.network(qrCodeImageUrl!) // Display the QR code
+                              :
+                          Image.asset(
                             'assets/images/qr.jpg', // Replace with your image path
                             height: screenHeight * 0.45, // Adjust dynamically based on screen height
-                            width: screenWidth * 0.9, // Center the image and set the width
-                            fit: BoxFit.cover, // Make sure image covers the space
+                            width: screenWidth * 0.4, // Center the image and set the width
+                            // fit: BoxFit.cover, // Make sure image covers the space
                           ),
                         ),
                       ),
                     ),
                   ),
                 ],
+              ),
               ),
             );
           },
@@ -247,11 +314,20 @@ class _MyHomePageState extends State<MyHomePage> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       ElevatedButton(
-                        onPressed: () {
+                        onPressed: ()  {
                           setState(() {
                             selectedAmount = '10'; // Set the selected amount
                           });
-                          showPopup(context); // Pass the BuildContext to the showPopup function
+                          handleButtonPress(
+                            context: context,
+                            amount: '10',
+                            currency: 'MYR',
+                            setLoading: (value) {
+                              setState(() {
+                                isLoading = value;
+                              });
+                            },
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           minimumSize: Size(200, 150), // Set both width and height to make it square
@@ -286,11 +362,20 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                       ), //1
                       ElevatedButton(
-                        onPressed: () {
+                        onPressed: ()  {
                           setState(() {
                             selectedAmount = '20'; // Set the selected amount
                           });
-                          showPopup(context); // Show the popup for selected amount
+                          handleButtonPress(
+                            context: context,
+                            amount: '20',
+                            currency: 'MYR',
+                            setLoading: (value) {
+                              setState(() {
+                                isLoading = value;
+                              });
+                            },
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           minimumSize: Size(200, 150),
@@ -325,11 +410,20 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                       ), //2
                       ElevatedButton(
-                        onPressed: () {
+                        onPressed: ()  {
                           setState(() {
                             selectedAmount = '50'; // Set the selected amount
                           });
-                          showPopup(context); // Show the popup for selected amount
+                          handleButtonPress(
+                            context: context,
+                            amount: '50',
+                            currency: 'MYR',
+                            setLoading: (value) {
+                              setState(() {
+                                isLoading = value;
+                              });
+                            },
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           minimumSize: Size(200, 150),
@@ -364,11 +458,20 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                       ), //3
                       ElevatedButton(
-                        onPressed: () {
+                        onPressed: ()  {
                           setState(() {
                             selectedAmount = '100'; // Set the selected amount
                           });
-                          showPopup(context); // Show the popup for selected amount
+                          handleButtonPress(
+                            context: context,
+                            amount: '100',
+                            currency: 'MYR',
+                            setLoading: (value) {
+                              setState(() {
+                                isLoading = value;
+                              });
+                            },
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           minimumSize: Size(200, 150),
@@ -445,6 +548,16 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
           ),
+        // Loading overlay
+        if (isLoading)
+    Container(
+      color: Colors.black.withOpacity(0.5), // Semi-transparent background
+      child: const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+        ),
+      ),
+    ),
         ],
       ),
     );
