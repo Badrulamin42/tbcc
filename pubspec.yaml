@@ -30,13 +30,23 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  google_fonts: ^4.0.3  # Make sure you have the latest version
+  pointycastle: ^3.4.0
+  convert: ^3.0.1  # For Base64 encoding
+  google_fonts: ^6.2.1  # Make sure you have the latest version
   http: ^1.0.0
+  basic_utils: ^3.3.1
+  encrypt: ^5.0.0
+  intl: ^0.17.0
+  qr_flutter: ^4.1.0
+
+
   # The following adds the Cupertino Icons font to your application.
 
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+
+dependency_overrides:
+  http: ^1.0.0
 
 dev_dependencies:
   flutter_test:
@@ -61,6 +71,7 @@ flutter:
   uses-material-design: true
   assets:
   - assets/images/
+  - assets/private_key.txt
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
