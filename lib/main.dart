@@ -52,10 +52,10 @@ class _MyHomePageState extends State<MyHomePage> {
   //load privatekey
   Future<String> loadPrivateKey() async {
     try {
-      // Load the private key from assets
-
-      final privateKey = await rootBundle.loadString('assets/private_key.txt');
-      return privateKey;
+      final rawData = await rootBundle.loadString('assets/private_key.txt');
+      // Normalize and clean the data
+      final sanitizedData = utf8.decode(rawData.codeUnits).replaceAll('\r\n', '\n').trim();
+      return sanitizedData;
     } catch (e) {
       throw Exception("Error loading private key: $e");
     }
@@ -63,7 +63,9 @@ class _MyHomePageState extends State<MyHomePage> {
 //api
 
   String generateReferenceId() {
-    return DateTime.now().millisecondsSinceEpoch.toString();
+    const prefix = "24D7EB69ACD0"; // Fixed prefix
+    String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    return "$prefix$timestamp"; // Concatenate prefix and timestamp
   }
 
   // Helper function to get month as a string (e.g., "Jan", "Feb", etc.)
@@ -96,6 +98,12 @@ class _MyHomePageState extends State<MyHomePage> {
     return encrypted.base64;
   }
 
+  String getFormattedDateTime() {
+    final now = DateTime.now();
+    final formatter = DateFormat('yyyy-MM-dd HH:mm:ss');
+    return formatter.format(now);
+  }
+
 
   Future<void> handleButtonPress({
     required BuildContext context,
@@ -118,7 +126,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
       final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
 
-      print('encrypted key : $encryptedKey');
+
       final payloadtoken = {
         "commandcode":"RequestToken",
         "devicecode":deviceCode,
@@ -158,42 +166,8 @@ class _MyHomePageState extends State<MyHomePage> {
         };
 
         final privateKeyPem = await loadPrivateKey();
-        String pemKey = readPrivateKey('assets/private_key.txt');
-        String cleanPem(String pem) {
-          return pem.replaceAll(RegExp(r'\s+'), ''); // Removing all whitespace characters
-        }
 
-        final cleanPrivateKeyPem = cleanPem(pemKey);
-
-        print("Private Key: $pemKey");
-        final privateKeyPem1 = '''-----BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEAweRWO8AKeU3h6tJ/DUe7kzRNV2i/O8EalKVdDPQACZJ+6g0L
-3JIz00J5lrQ/hpO1V539CF5kbeElot8Pd8fzBWINMWyr1xMltNpE+XwOzUA1/lXH
-9jaeKTqushXfSfKlS4xYUAcZQXO9dDOtYUebjz23Tl+Hud5l7yaneDgIFY+I/8h3
-EeDwWnDFnBRzy+iq04LNNykG6OA/qS1BW0dL4V0X4ZyzloFeu8Vpq6gE+qbhxUE3
-qZZU8V8MD7E1EQQnsbiHjbndZ4BYS+VCr8zcLtn+GoueWb4m0OSlGb2k2YRrFP+M
-4pXfQeWvUbniXALoUZBTZ0VwG435q8UmfASlYwIDAQABAoIBAFAvnggs5kf/kSh7
-sGauHWGGFlxJahkMxfDmqKJkQKW0y78A8UBhyIQcsEtGtSTzbmJTaONuoisdG2MN
-zAhWDWfTArDHiBO1C/mM8UyaZUa2QP4zvLRTJzrW1Yu55vPeoUSqwJUsMmIyuw3V
-F2WtZySouef0Mx4H33E1s7nQtmsvjeDk/aXCBJenIH8enQDHqgzqv7U5ZUqTzdYd
-TuizKlkryw/1ZHd2+O34BtOb1Re5rBpTk7sTMHnarxyANCMgHzm/QoCNjcV/+ND0
-1u5lHaVruYNfoRKER2p7QCdKXAcOFJngwvybnbxhB8MyaOVkuxTPt2bGRTIJxq42
-hFmQ7sUCgYEA8npMwHJFNxPKb/BANoztmttYdqRvMnlMsG+opKimgU4eAhplGBDv
-VlhZnD3WyuWdjlR673W0t5vfbii0Ri3HlHnbfRW5z1ZRr5BgaEvN+7c+x8PXYsFo
-0kve/PXw1U5Ol9XD3T1b7l1x2AegVL25ax4WQ9rYarb1XBmyJ6DAt/UCgYEAzLRo
-mu11m9aR7nNvXNApljDR7eHJXf4LFeQ2LtvMoY+E2H16d3Jm3m2kLH1ab71/9dBy
-4TW/XF50sZRshLD50m6Ufn3WPNbwvgqtpyvgRhRB5MXpTmnTgWfkLAm56stRrFBg
-q50PVuzN6OcaLjCZD58PdZhqPpOSjxwoU7xViPcCgYBVqqPHMhgGF3XkCmuFWlDv
-7yLX98xZdsWDaE+arQL2mBS+BXlGAWWtidVPAAIM+QarLGmqhFlurSFJGBRo3u+u
-I0dKcAyPlh2R+140OuPxVJJXnXdRKqfP9II5uOJ3Wg0mU525Yl5CXr1D553bkpQZ
-pi2Tl5PyT+VrvqBUo9SyqQKBgQCO6mmZuK2CloSd4NPgDajrJbx7A0buK14b849s
-maI9LZEHAFvPJvzwz8VuFjpchwXeXaDG4Rpv57Y7AK/e2BwisXdU9I/tO/cqBxSE
-ARr8ckoq6Y3gY/v5fcoMgOHfLgIgdqF3TxkVjBCaSTa7Bszl3hwR8s5CUA9jgLoa
-9AMXswKBgQCwnJMTflpDNP0XwETNY8Y15raULMveqvCIipTg1TkzeS4luaI82uhY
-vI3HnI8PWGEGSTMCAnXz8cq78eLUErjD9XGG7sobBDcOe7nlf4WpuhwN2GS6syxF
-iSJ2IiW4pVP2IyRWDcIv1v3ugt0sr3Jw62tcTgYNaH3Fc+xx3xDJAw==
------END RSA PRIVATE KEY-----''';
-        String signature = await generateSignature(jsonEncode(payload), privateKeyPem1);
+        String signature = await generateSignature(jsonEncode(payload), privateKeyPem);
         print('Signature: $signature');
         final response = await http.post(
           Uri.parse(apiUrl),
@@ -209,19 +183,55 @@ iSJ2IiW4pVP2IyRWDcIv1v3ugt0sr3Jw62tcTgYNaH3Fc+xx3xDJAw==
         final QrResponseData = json.decode(response.body);
         Map<String, dynamic> qrparsedJson = jsonDecode(response.body);
         String qrcode = qrparsedJson ['data'][0]['qrcode'] ?? null;
+        String refid = qrparsedJson ['data'][0]['referenceid'] ?? null;
         print('qr res : $QrResponseData');
         print('qr code : $qrcode');
         setState(() {
           qrCodeImageUrl = qrcode; // Save the generated QR code URL
         });
 
+        final SetTrxEWpayload = {
+          "commandcode": "DI_SetTransactionEWalletV2",
+          "devicecode": deviceCode,
+          "data": [
+            {
+              "statusstarttime": getFormattedDateTime(),
+              "machineid": "W3",
+              "status": "Submit",
+              "eutdcounter": "5476.00",
+              "eamount": amount,
+              "eoriginalamount": amount,
+              "discount": "0",
+              "discountentitlementamount": "0.00",
+              "qrcode": "",
+              "ewallettransactionid": refid,
+              "ewallettypecode": "DUITNOW",
+              "numberofinquiry": "0",
+              "duration": "0/145",
+              "errorcode": "0",
+              "errormessage": "",
+              "ewallettestusercode": "",
+              "responsetime": "4",
+              "rssi": "-66"
+            }
+          ]
+        };
+
+
+
         // Show a success message or handle response data
       } else {
+        setState(() {
+          qrCodeImageUrl = null; // Save the generated QR code URL
+        });
         print('Failed: ${responsetoken.statusCode}, ${responsetoken.body}');
         // Show an error message or handle the failure
       }
     } catch (e) {
       print('Error fetch: $e');
+      setState(() {
+        qrCodeImageUrl = null; // Save the generated QR code URL
+      });
       // Show a network error message
     } finally {
       // Hide the loading indicator
@@ -312,7 +322,7 @@ iSJ2IiW4pVP2IyRWDcIv1v3ugt0sr3Jw62tcTgYNaH3Fc+xx3xDJAw==
                     ),
                   ),
                 Positioned(
-                  top: 180, // Adjust the space from the title
+                  top: 140, // Adjust the space from the title
                   left: 0,
                   right: 0,
                   child: Padding(
@@ -326,6 +336,24 @@ iSJ2IiW4pVP2IyRWDcIv1v3ugt0sr3Jw62tcTgYNaH3Fc+xx3xDJAw==
                   ),
                   ),
                 ),
+
+                  Positioned(
+                    top: 185, // Position it from the top
+                    left: 0,
+                    right: 0,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Text(
+                        'QR',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black,
+                        ),
+                        textAlign: TextAlign.center, // Center text
+                      ),
+                    ),
+                  ),
                   // Countdown timer at the top-left corner
                   Positioned(
                     top: 14,
@@ -357,7 +385,7 @@ iSJ2IiW4pVP2IyRWDcIv1v3ugt0sr3Jw62tcTgYNaH3Fc+xx3xDJAw==
                     left: 0,
                     right: 0,
                     child: Padding(
-                      padding: const EdgeInsets.all(5.0), // Adjust the margin around the image
+                      padding: const EdgeInsets.all(15.0), // Adjust the margin around the image
                       child: Align(
                         alignment: Alignment.bottomCenter, // Align the image to the bottom and center
                         child: Container(
@@ -365,7 +393,7 @@ iSJ2IiW4pVP2IyRWDcIv1v3ugt0sr3Jw62tcTgYNaH3Fc+xx3xDJAw==
                           decoration: BoxDecoration(
                             border: Border.all(
                               color: const Color(0xFFE52561), // Border color (same pinkish-red color)
-                              width: 4.0, // Border width
+                              width: 10.0, // Border width
                             ),
                             borderRadius: BorderRadius.circular(8.0), // Optional: Rounded corners
                           ),
@@ -383,8 +411,8 @@ iSJ2IiW4pVP2IyRWDcIv1v3ugt0sr3Jw62tcTgYNaH3Fc+xx3xDJAw==
 
                               : Image.asset(
                             'assets/images/errorpage.png', // Replace with your image path
-                            height: screenHeight * 0.45, // Adjust dynamically based on screen height
-                            width: screenWidth * 0.4, // Center the image and set the width
+                            height: screenHeight * 0.3, // Adjust dynamically based on screen height
+                            width: screenWidth * 0.3, // Center the image and set the width
                           ),
                         ),
                       ),
