@@ -8,13 +8,18 @@ import 'utils//RSA.dart'; // Import the signature utility file
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'dart:io';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'utils/mqtt_service.dart'; // Import the MQTT service class
 
 void main() {
   runApp(const MyApp());
 }
 
 bool isLoading = false;
-
+String deviceCode = "TQR000001"; // Replace with the actual device code
+String rssi = '-39';
+//set encryption obj
+const secretKey = r'24D7EB69ACD0!@#$'; // Must be 32 characters
+const ivString = '0192006944061854'; // Must be 16 characters
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -38,23 +43,44 @@ class MyHomePage extends StatefulWidget {
   _MyHomePageState createState() => _MyHomePageState();
 }
 
+late MqttService mqttService;
 
+@override
+void initState() {
+  initState();
+
+  mqttService = MqttService();
+
+  mqttService.connect(onMessageReceivedCallback: (message) {
+    // Handle received MQTT messages here
+    print('Message received in MainPage: $message');
+  });
+}
+
+@override
+void dispose() {
+  mqttService.disconnect();
+  dispose();
+}
 
 class _MyHomePageState extends State<MyHomePage> {
   String selectedAmount = ''; // Store the selected amount as state
   String? qrCodeImageUrl;
-  String? Token;
+  String? refId = '';
+  String Token = '';
   String Signature = '';
 
   String readPrivateKey(String filePath) {
     return File(filePath).readAsStringSync();
   }
+
   //load privatekey
   Future<String> loadPrivateKey() async {
     try {
       final rawData = await rootBundle.loadString('assets/private_key.txt');
       // Normalize and clean the data
-      final sanitizedData = utf8.decode(rawData.codeUnits).replaceAll('\r\n', '\n').trim();
+      final sanitizedData =
+          utf8.decode(rawData.codeUnits).replaceAll('\r\n', '\n').trim();
       return sanitizedData;
     } catch (e) {
       throw Exception("Error loading private key: $e");
@@ -70,15 +96,29 @@ class _MyHomePageState extends State<MyHomePage> {
 
   // Helper function to get month as a string (e.g., "Jan", "Feb", etc.)
   String _getMonthString(int month) {
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec"
+    ];
     return months[month - 1];
   }
 
-
-  String encryptPlainText(String deviceCode, String secretKey, String ivString) {
+  String encryptPlainText(
+      String deviceCode, String secretKey, String ivString) {
 // Get the current UTC time, add 1 minute and format it
     final now = DateTime.now().toUtc().add(Duration(minutes: 1));
-    final formattedTime = "${now.year}-${_getMonthString(now.month)}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
+    final formattedTime =
+        "${now.year}-${_getMonthString(now.month)}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
 
     // Concatenate the device code and formatted time
     final plainText = '$deviceCode,$formattedTime';
@@ -88,11 +128,11 @@ class _MyHomePageState extends State<MyHomePage> {
     final iv = encrypt.IV.fromUtf8(ivString); // 16-byte IV for AES
 
     // Configure AES with CBC mode and PKCS7 padding
-    final encrypter = encrypt.Encrypter(encrypt.AES(key, mode: encrypt.AESMode.cbc, padding: 'PKCS7'));
+    final encrypter = encrypt.Encrypter(
+        encrypt.AES(key, mode: encrypt.AESMode.cbc, padding: 'PKCS7'));
 
     // Encrypt the plaintext
     final encrypted = encrypter.encrypt(plainText, iv: iv);
-
 
     // Return the encrypted text in Base64 format
     return encrypted.base64;
@@ -103,7 +143,62 @@ class _MyHomePageState extends State<MyHomePage> {
     final formatter = DateFormat('yyyy-MM-dd HH:mm:ss');
     return formatter.format(now);
   }
+  Future<void> successfulDispense() async {
+  //fetch api successful dispense
+  }
 
+  Future<void> cancelFetchTRX() async {
+
+    final privateKeyPem = await loadPrivateKey();
+    final payloadcanceltrx = {
+      "commandcode": "DI_SetTransactionEWalletV2",
+      "devicecode": deviceCode,
+      "data": [
+        {
+          "statusstarttime": getFormattedDateTime(),
+          "machineid": "W1",
+          "status": "Payment",
+          "eutdcounter": selectedAmount,
+          "eamount": selectedAmount,
+          "eoriginalamount": selectedAmount,
+          "discount": "0",
+          "discountentitlementamount": "0.00",
+          "qrcode": "",
+          "ewallettransactionid": refId,
+          "ewallettypecode": "DUITNOW",
+          "numberofinquiry": "0",
+          "duration": "0/175",
+          "errorcode": "255",
+          "errormessage": "USER CANCELLED",
+          "ewallettestusercode": "",
+          "responsetime": "2",
+          "rssi": rssi
+        }
+      ]
+    };
+    String signature =
+    await generateSignature(jsonEncode(payloadcanceltrx), privateKeyPem);
+    try {
+      final responseTRXEW = await http.post(
+        Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Token': Token,
+          'Signature': signature
+        },
+        body: json.encode(payloadcanceltrx),
+      );
+
+      if (responseTRXEW.statusCode == 200) {
+        print('Transaction cancelled successfully: ${responseTRXEW.body}');
+      } else {
+        print('Failed to cancel transaction. Status code: ${responseTRXEW.statusCode}');
+        print('Response body: ${responseTRXEW.body}');
+      }
+    } catch (err) {
+      print('Error during fetch cancel trx: $err');
+    }
+  }
 
   Future<void> handleButtonPress({
     required BuildContext context,
@@ -114,36 +209,28 @@ class _MyHomePageState extends State<MyHomePage> {
     String referenceId = generateReferenceId();
     String apiUrl = 'https://tqrdnqr-api.transpire.com.my/API/Exchange';
 
-
- try{
+    try {
       setLoading(true);
-
-      String deviceCode = "TQR000001";  // Replace with the actual device code
-      //set encryption obj
-      const secretKey = r'24D7EB69ACD0!@#$'; // Must be 32 characters
-      const ivString = '0192006944061854'; // Must be 16 characters
-
 
       final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
 
-
       final payloadtoken = {
-        "commandcode":"RequestToken",
-        "devicecode":deviceCode,
-        "result":"false",
-        "data":[{ "key":encryptedKey }]
+        "commandcode": "RequestToken",
+        "devicecode": deviceCode,
+        "result": "false",
+        "data": [
+          {"key": encryptedKey}
+        ]
       };
       // final response = await http.get(Uri.parse(apiUrl));
-    final responsetoken = await http.post(
-      Uri.parse(apiUrl),
-      headers: {
-        'Content-Type': 'application/json',
-
-      },
-      body: json.encode(payloadtoken),
-    );
+      final responsetoken = await http.post(
+        Uri.parse(apiUrl),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(payloadtoken),
+      );
       // Make the POST request
-
 
       // Handle the response
       if (responsetoken.statusCode == 200) {
@@ -152,51 +239,59 @@ class _MyHomePageState extends State<MyHomePage> {
         String token = parsedJson['data'][0]['token'];
         print('success token : $responseData');
 
-        final payload = {
-          "commandcode":"DI_GetDynamicQR",
-          "devicecode":deviceCode,
-          "result":"false",
-          "data":[{
-            "referenceid": referenceId,
-            "eamount":amount,
-            "validityduration":"120",
-            "rssi":"-39"
-          }]
+        setState(() {
+          Token = token; // Save the generated QR code URL
+        });
 
+        final payload = {
+          "commandcode": "DI_GetDynamicQR",
+          "devicecode": deviceCode,
+          "result": "false",
+          "data": [
+            {
+              "referenceid": referenceId,
+              "eamount": amount,
+              "validityduration": "120",
+              "rssi": "-39"
+            }
+          ]
         };
 
         final privateKeyPem = await loadPrivateKey();
 
-        String signature = await generateSignature(jsonEncode(payload), privateKeyPem);
+        String signature =
+            await generateSignature(jsonEncode(payload), privateKeyPem);
         print('Signature: $signature');
         final response = await http.post(
           Uri.parse(apiUrl),
           headers: {
             'Content-Type': 'application/json',
             'Token': token,
-            'Signature' : signature
-
+            'Signature': signature
           },
           body: json.encode(payload),
         );
         //
         final QrResponseData = json.decode(response.body);
         Map<String, dynamic> qrparsedJson = jsonDecode(response.body);
-        String qrcode = qrparsedJson ['data'][0]['qrcode'] ?? null;
-        String refid = qrparsedJson ['data'][0]['referenceid'] ?? null;
+        String qrcode = qrparsedJson['data'][0]['qrcode'] ?? null;
+        String refid = qrparsedJson['data'][0]['referenceid'] ?? null;
         print('qr res : $QrResponseData');
-        print('qr code : $qrcode');
+
         setState(() {
           qrCodeImageUrl = qrcode; // Save the generated QR code URL
         });
 
+        setState(() {
+          refId = refid; // Save the generated QR code URL
+        });
         final SetTrxEWpayload = {
           "commandcode": "DI_SetTransactionEWalletV2",
           "devicecode": deviceCode,
           "data": [
             {
               "statusstarttime": getFormattedDateTime(),
-              "machineid": "W3",
+              "machineid": "TCN Office",
               "status": "Submit",
               "eutdcounter": "5476.00",
               "eamount": amount,
@@ -211,13 +306,27 @@ class _MyHomePageState extends State<MyHomePage> {
               "errorcode": "0",
               "errormessage": "",
               "ewallettestusercode": "",
-              "responsetime": "4",
-              "rssi": "-66"
+              "responsetime": "2",
+              "rssi": "-39"
             }
           ]
         };
 
+        if (qrcode != null) {
+          final responseTRXEW = await http.post(
+            Uri.parse(apiUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'Token': token,
+            },
+            body: json.encode(SetTrxEWpayload),
+          );
 
+          final TRXEWResponseData = json.decode(response.body);
+          print('TRXEW res: $TRXEWResponseData');
+        } else {
+          print('TRXEW error: no QR');
+        }
 
         // Show a success message or handle response data
       } else {
@@ -240,7 +349,6 @@ class _MyHomePageState extends State<MyHomePage> {
       // Show popup after API call
       showPopup(context);
     }
-
   }
 
   // Function to show modal popup
@@ -257,15 +365,21 @@ class _MyHomePageState extends State<MyHomePage> {
           });
         } else {
           timer.cancel();
-          Navigator.of(context).pop(); // Close the modal when countdown reaches 0
+          Navigator.of(context)
+              .pop(); // Close the modal when countdown reaches 0
+
+          cancelFetchTRX();
         }
       });
     }
 
     showDialog(
       context: context,
+      barrierDismissible:
+          false, // Prevents closing the dialog when clicking outside
       builder: (BuildContext context) {
-        double screenWidth = MediaQuery.of(context).size.width; // Get screen width
+        double screenWidth =
+            MediaQuery.of(context).size.width; // Get screen width
         double screenHeight = MediaQuery.of(context).size.height;
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
@@ -274,7 +388,8 @@ class _MyHomePageState extends State<MyHomePage> {
               startCountdown(setState);
             }
             return AlertDialog(
-              insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 130),
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 40, vertical: 130),
               contentPadding: EdgeInsets.zero,
               titlePadding: EdgeInsets.zero,
               shape: RoundedRectangleBorder(
@@ -283,143 +398,190 @@ class _MyHomePageState extends State<MyHomePage> {
               content: SizedBox(
                 width: 400, // Set a fixed width
                 height: 600, // Set a fixed height
-                 child: Stack(
-                children: [
-                  // Positioned title from the top
-                  Positioned(
-                    top: 50, // Position it from the top
-                    left: 0,
-                    right: 0,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text(
-                        'Payment amount (MYR)',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
+                child: Stack(
+                  children: [
+                    // Positioned title from the top
+                    Positioned(
+                      top: 50, // Position it from the top
+                      left: 0,
+                      right: 0,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Text(
+                          'Payment amount (MYR)',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                          textAlign: TextAlign.center, // Center text
                         ),
-                        textAlign: TextAlign.center, // Center text
                       ),
                     ),
-                  ),
-                  // Positioned amount below the title
-                  Positioned(
-                    top: 70, // Adjust the space from the title
-                    left: 0,
-                    right: 0,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text(
-                        selectedAmount,
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
+                    // Positioned amount below the title
+                    Positioned(
+                      top: 70, // Adjust the space from the title
+                      left: 0,
+                      right: 0,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Text(
+                          selectedAmount,
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                          ),
+                          textAlign: TextAlign.center, // Center text
                         ),
-                        textAlign: TextAlign.center, // Center text
                       ),
                     ),
-                  ),
-                Positioned(
-                  top: 140, // Adjust the space from the title
-                  left: 0,
-                  right: 0,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child:
-                    Image.asset(
-                    'assets/images/duitnowlogo.png', // Replace with your logo path
-                    height: 50, // Adjust logo height
-                    width: 50, // Adjust logo width
-                    fit: BoxFit.contain, // Adjust image fit
-                  ),
-                  ),
+                    Positioned(
+                      top: 140, // Adjust the space from the title
+                      left: 0,
+                      right: 0,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Image.asset(
+                          'assets/images/duitnowlogo.png', // Replace with your logo path
+                          height: 50, // Adjust logo height
+                          width: 50, // Adjust logo width
+                          fit: BoxFit.contain, // Adjust image fit
+                        ),
+                      ),
+                    ),
+
+                    Positioned(
+                      top: 185, // Position it from the top
+                      left: 0,
+                      right: 0,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Text(
+                          'QR',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black,
+                          ),
+                          textAlign: TextAlign.center, // Center text
+                        ),
+                      ),
+                    ),
+                    // Countdown timer at the top-left corner
+                    Positioned(
+                      top: 14,
+                      left: 16,
+                      child: Text(
+                        'Closing in $countdown s',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ),
+                    // Close button at the top-right corner
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: IconButton(
+                        icon: const Icon(Icons.close, color: Colors.black),
+                        onPressed: () {
+                          timer?.cancel(); // Stop the countdown timer
+                          Navigator.of(context).pop(); // Close the modal
+                          cancelFetchTRX();
+                        },
+                      ),
+                    ),
+                    // Positioned QR image at the bottom of the dialog
+                    Positioned(
+                      bottom: 0, // Position the image at the bottom
+                      left: 0,
+                      right: 0,
+                      child: Padding(
+                        padding: const EdgeInsets.all(15.0), // Adjust the margin around the image
+                        child: Align(
+                          alignment: Alignment.bottomCenter, // Align the image to the bottom and center
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // QR code container
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 10.0), // Extra margin from the bottom if needed
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: const Color(0xFFE52561), // Border color (same pinkish-red color)
+                                    width: 10.0, // Border width
+                                  ),
+                                  borderRadius: BorderRadius.circular(8.0), // Optional: Rounded corners
+                                ),
+                                padding: const EdgeInsets.all(8.0), // Optional: Padding inside the border
+                                child: qrCodeImageUrl != null
+                                    ? QrImageView(
+                                  data: qrCodeImageUrl ?? 'default_fallback_value',
+                                  version: QrVersions.auto,
+                                  size: 320,
+                                  gapless: false,
+                                  foregroundColor: const Color(0xFFE52561), // QR code color
+                                )
+                                    : Image.asset(
+                                  'assets/images/errorpage.png', // Replace with your image path
+                                  height: screenHeight * 0.3, // Adjust dynamically based on screen height
+                                  width: screenWidth * 0.3, // Center the image and set the width
+                                ),
+                              ),
+
+                              // Rectangle with "Scan code to pay"
+                              Container(
+                                width: screenWidth * 0.8, // Adjust width
+                                padding: const EdgeInsets.symmetric(vertical: 10.0),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE52561), // Pinkish red background
+                                  borderRadius: BorderRadius.circular(8.0), // Optional: Rounded corners
+                                ),
+                                child: Text(
+                                  'Scan code to pay',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16.0,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+
+                              // Row of 3 small logos
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Image.asset(
+                                    'assets/images/tnglogo.png', // Replace with logo 1 image path
+                                    height: 40.0, // Small size for the logos
+                                    width: 40.0,
+                                  ),
+                                  SizedBox(width: 10.0), // Space between logos
+                                  Image.asset(
+                                    'assets/images/grabpaylogo.png', // Replace with logo 2 image path
+                                    height: 40.0,
+                                    width: 40.0,
+                                  ),
+                                  SizedBox(width: 10.0),
+                                  Image.asset(
+                                    'assets/images/boostlogo.png', // Replace with logo 3 image path
+                                    height: 40.0,
+                                    width: 40.0,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  ],
                 ),
-
-                  Positioned(
-                    top: 185, // Position it from the top
-                    left: 0,
-                    right: 0,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text(
-                        'QR',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black,
-                        ),
-                        textAlign: TextAlign.center, // Center text
-                      ),
-                    ),
-                  ),
-                  // Countdown timer at the top-left corner
-                  Positioned(
-                    top: 14,
-                    left: 16,
-                    child: Text(
-                      'Closing in $countdown s',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red,
-                      ),
-                    ),
-                  ),
-                  // Close button at the top-right corner
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: IconButton(
-                      icon: const Icon(Icons.close, color: Colors.black),
-                      onPressed: () {
-                        timer?.cancel(); // Stop the countdown timer
-                        Navigator.of(context).pop(); // Close the modal
-                      },
-                    ),
-                  ),
-                  // Positioned QR image at the bottom of the dialog
-                  Positioned(
-                    bottom: 0, // Position the image at the bottom
-                    left: 0,
-                    right: 0,
-                    child: Padding(
-                      padding: const EdgeInsets.all(15.0), // Adjust the margin around the image
-                      child: Align(
-                        alignment: Alignment.bottomCenter, // Align the image to the bottom and center
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 10.0), // Extra margin from the bottom if needed
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: const Color(0xFFE52561), // Border color (same pinkish-red color)
-                              width: 10.0, // Border width
-                            ),
-                            borderRadius: BorderRadius.circular(8.0), // Optional: Rounded corners
-                          ),
-                          padding: const EdgeInsets.all(8.0), // Optional: Padding inside the border
-                          child: qrCodeImageUrl != null
-                              ?
-                              QrImageView(
-                                data: qrCodeImageUrl ?? 'default_fallback_value',
-                                version: QrVersions.auto,
-                                size: 320,
-                                gapless: false,
-                                foregroundColor: const Color(0xFFE52561), // QR code color
-                              )
-
-
-                              : Image.asset(
-                            'assets/images/errorpage.png', // Replace with your image path
-                            height: screenHeight * 0.3, // Adjust dynamically based on screen height
-                            width: screenWidth * 0.3, // Center the image and set the width
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
               ),
             );
           },
@@ -428,11 +590,6 @@ class _MyHomePageState extends State<MyHomePage> {
     ).then((_) {
       timer?.cancel(); // Ensure the timer is canceled when the dialog is closed
     });
-
-
-
-
-
   }
 
   @override
@@ -467,9 +624,9 @@ class _MyHomePageState extends State<MyHomePage> {
             child: Container(
               width: screenWidth,
               height:
-              screenHeight * 0.6, // Adjusted to take the remaining space
+                  screenHeight * 0.6, // Adjusted to take the remaining space
               padding:
-              const EdgeInsets.all(15.0), // Padding inside the container
+                  const EdgeInsets.all(15.0), // Padding inside the container
               margin: const EdgeInsets.all(1.0), // Margin around the container
               decoration: BoxDecoration(
                 color: Colors.white, // Background color
@@ -481,7 +638,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         0), // No offset, so the shadow is centered around the widget
                     blurRadius: 0.5, // Blur radius to make the shadow smooth
                     spreadRadius:
-                    0.5, // Optional: Adds a bit of spread to make the shadow larger
+                        0.5, // Optional: Adds a bit of spread to make the shadow larger
                   )
                 ],
               ),
@@ -509,12 +666,12 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                   const SizedBox(
                       height:
-                      30), // Add space between description and content below
+                          30), // Add space between description and content below
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       ElevatedButton(
-                        onPressed: ()  {
+                        onPressed: () {
                           setState(() {
                             selectedAmount = '10.00'; // Set the selected amount
                           });
@@ -530,10 +687,13 @@ class _MyHomePageState extends State<MyHomePage> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          minimumSize: Size(200, 150), // Set both width and height to make it square
-                          backgroundColor: Colors.blue.shade50, // Change background color here
+                          minimumSize: Size(200,
+                              150), // Set both width and height to make it square
+                          backgroundColor: Colors
+                              .blue.shade50, // Change background color here
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12), // Optional: rounded corners
+                            borderRadius: BorderRadius.circular(
+                                12), // Optional: rounded corners
                           ),
                         ),
                         child: const Text.rich(
@@ -549,20 +709,23 @@ class _MyHomePageState extends State<MyHomePage> {
                                 ),
                               ),
                               TextSpan(
-                                text: 'Coins\nMYR 10.00', // Line break and the rest of the text
+                                text:
+                                    'Coins\nMYR 10.00', // Line break and the rest of the text
                                 style: TextStyle(
                                   fontSize: 18, // Smaller size for "MYR 10"
-                                  fontWeight: FontWeight.normal, // Regular weight for the rest
+                                  fontWeight: FontWeight
+                                      .normal, // Regular weight for the rest
                                   color: Colors.lightBlue,
                                 ),
                               ),
                             ],
                           ),
-                          textAlign: TextAlign.center, // This centers the whole text
+                          textAlign:
+                              TextAlign.center, // This centers the whole text
                         ),
                       ), //1
                       ElevatedButton(
-                        onPressed: ()  {
+                        onPressed: () {
                           setState(() {
                             selectedAmount = '20.00'; // Set the selected amount
                           });
@@ -610,7 +773,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                       ), //2
                       ElevatedButton(
-                        onPressed: ()  {
+                        onPressed: () {
                           setState(() {
                             selectedAmount = '50.00'; // Set the selected amount
                           });
@@ -658,9 +821,10 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                       ), //3
                       ElevatedButton(
-                        onPressed: ()  {
+                        onPressed: () {
                           setState(() {
-                            selectedAmount = '100.00'; // Set the selected amount
+                            selectedAmount =
+                                '100.00'; // Set the selected amount
                           });
                           handleButtonPress(
                             context: context,
@@ -748,16 +912,45 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
           ),
-        // Loading overlay
-        if (isLoading)
-    Container(
-      color: Colors.black.withOpacity(0.5), // Semi-transparent background
-      child: const Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-        ),
-      ),
-    ),
+          // Loading overlay
+          if (isLoading)
+            Container(
+              color:
+                  Colors.black.withOpacity(0.5), // Semi-transparent background
+              child: Center(
+                child: Container(
+                  padding:
+                      const EdgeInsets.all(20), // Add padding inside the box
+                  decoration: BoxDecoration(
+                    color: Colors.white, // White background for the box
+                    borderRadius: BorderRadius.circular(12), // Rounded corners
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize
+                        .min, // Ensures the content takes minimum space
+                    crossAxisAlignment: CrossAxisAlignment
+                        .center, // Center the content horizontally
+                    children: [
+                      CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.blue), // You can change the color
+                      ),
+                      const SizedBox(
+                          height:
+                              16), // Space between the progress indicator and text
+                      const Text(
+                        'Please wait, generating QR code...',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

@@ -1,0 +1,1 @@
+mosquitto_sub -h mqtts://www.transpire.com.my -p 8883 -t "TQR000001" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key.pem"
