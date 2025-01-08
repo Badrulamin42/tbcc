@@ -43,25 +43,7 @@ class MyHomePage extends StatefulWidget {
   _MyHomePageState createState() => _MyHomePageState();
 }
 
-late MqttService mqttService;
 
-@override
-void initState() {
-  initState();
-
-  mqttService = MqttService();
-
-  mqttService.connect(onMessageReceivedCallback: (message) {
-    // Handle received MQTT messages here
-    print('Message received in MainPage: $message');
-  });
-}
-
-@override
-void dispose() {
-  mqttService.disconnect();
-  dispose();
-}
 
 class _MyHomePageState extends State<MyHomePage> {
   String selectedAmount = ''; // Store the selected amount as state
@@ -87,6 +69,71 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 //api
+
+  late MqttService mqttService;
+
+  @override
+  void initState() {
+
+
+    mqttService = MqttService();
+
+    mqttService.connect(onMessageReceivedCallback: (message) {
+      // Handle received MQTT messages here
+      print('Message received in MainPage: $message');
+
+      try {
+        // Parse the JSON string into a Dart object (List<dynamic>)
+        List<dynamic> parsedMessage = jsonDecode(message);
+
+        // Loop through each item in the parsed list
+        for (var item in parsedMessage) {
+          if (item is Map<String, dynamic>) {
+            // Extract required fields
+            final commandCode = item['commandcode'] ?? 'Unknown';
+            final result = item['result'] ?? 'Unknown';
+            final data = item['data'] ?? {};
+
+            // Access nested data fields
+            final expiryTime = data['expirytime'] ?? 'Unknown';
+            final amount = data['amount'] ?? 'Unknown';
+            final referenceId = data['referenceid'] ?? 'Unknown';
+
+            // Print or use the extracted values
+            print('Command Code: $commandCode');
+            print('Result: $result');
+            print('Expiry Time: $expiryTime');
+            print('Amount: $amount');
+            print('Reference ID: $referenceId');
+
+            if(referenceId == refId){
+
+              print('User has successfully paid');
+              cancelFetchTRX();
+            }
+            else{
+              print('Wrong Reference ID!!!');
+            }
+
+              // If you've got what you need, you can break out of the loop
+              dispose();
+            break;
+
+          }
+
+        }
+      } catch (e) {
+        print('Error parsing message: $e');
+      }
+
+    });
+  }
+
+  @override
+  void dispose() {
+    mqttService.disconnect();
+
+  }
 
   String generateReferenceId() {
     const prefix = "24D7EB69ACD0"; // Fixed prefix
@@ -190,10 +237,10 @@ class _MyHomePageState extends State<MyHomePage> {
       );
 
       if (responseTRXEW.statusCode == 200) {
-        print('Transaction cancelled successfully: ${responseTRXEW.body}');
+        print('Transaction cancelled successfully');
       } else {
         print('Failed to cancel transaction. Status code: ${responseTRXEW.statusCode}');
-        print('Response body: ${responseTRXEW.body}');
+
       }
     } catch (err) {
       print('Error during fetch cancel trx: $err');
@@ -237,7 +284,7 @@ class _MyHomePageState extends State<MyHomePage> {
         final responseData = json.decode(responsetoken.body);
         Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
         String token = parsedJson['data'][0]['token'];
-        print('success token : $responseData');
+
 
         setState(() {
           Token = token; // Save the generated QR code URL
@@ -261,7 +308,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
         String signature =
             await generateSignature(jsonEncode(payload), privateKeyPem);
-        print('Signature: $signature');
+
         final response = await http.post(
           Uri.parse(apiUrl),
           headers: {
@@ -276,7 +323,7 @@ class _MyHomePageState extends State<MyHomePage> {
         Map<String, dynamic> qrparsedJson = jsonDecode(response.body);
         String qrcode = qrparsedJson['data'][0]['qrcode'] ?? null;
         String refid = qrparsedJson['data'][0]['referenceid'] ?? null;
-        print('qr res : $QrResponseData');
+
 
         setState(() {
           qrCodeImageUrl = qrcode; // Save the generated QR code URL
@@ -323,9 +370,13 @@ class _MyHomePageState extends State<MyHomePage> {
           );
 
           final TRXEWResponseData = json.decode(response.body);
-          print('TRXEW res: $TRXEWResponseData');
+          initState();
+
         } else {
           print('TRXEW error: no QR');
+          setState(() {
+            qrCodeImageUrl = null; // Save the generated QR code URL
+          });
         }
 
         // Show a success message or handle response data

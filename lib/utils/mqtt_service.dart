@@ -1,7 +1,9 @@
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 import 'package:flutter/services.dart'; // For loading assets
-import 'dart:io'; // For dealing with certificates
+import 'dart:io';
+
+import 'package:tbcc/main.dart'; // For dealing with certificates
 
 // Generate a unique client ID based on the device data and current timestamp
 String generateClientId() {
@@ -11,7 +13,7 @@ String generateClientId() {
 
 class MqttService {
   late MqttServerClient client;
-  final String broker = 'www.transpire.com.my'; // Your broker address
+  final String broker = 'transpireqr-api.transpire.com.my'; // Your broker address
   final int port = 8883; // Secure port for MQTT over SSL
   final String clientId = generateClientId(); // Unique client ID
   Function(String)? onMessageReceived; // Callback for handling messages
@@ -31,20 +33,20 @@ class MqttService {
     onMessageReceived = onMessageReceivedCallback;
 
     client = MqttServerClient.withPort(broker, clientId, port);
-    client.logging(on: true);
+    client.logging(on: false); // debugging
     client.keepAlivePeriod = 60;
     client.secure = true; // Enable secure connection (SSL/TLS)
     client.onDisconnected = onDisconnected;
 
     // Load the CA certificate (PEM file) if needed for validation
     try {
-      final caCert = await loadCertificate('mqtt_key.pem'); // Load the PEM certificate
+      final caCert = await loadCertificate('mqtt_key.crt'); // Load the PEM certificate
       final securityContext = SecurityContext.defaultContext;
       securityContext.setTrustedCertificatesBytes(caCert);
 
-      client.onBadCertificate = (certificate) {
+      client.onBadCertificate = (Object? certificate) {
         print("Bad certificate: $certificate");
-        return true; // Allow the connection even if the certificate is bad (you may want to handle this differently)
+        return true; // Allow for testing, not recommended in production.
       };
 
       final connMessage = MqttConnectMessage()
@@ -58,8 +60,7 @@ class MqttService {
         await client.connect();
         print('Connected to MQTT broker.');
 
-        // Subscribe to a topic if needed
-        subscribeToTopic('your/topic'); // Replace with your topic
+        subscribeToTopic('/TQR/$deviceCode'); // Replace with your topic
       } catch (e) {
         print('Connection failed: $e');
         client.disconnect();
@@ -77,14 +78,14 @@ class MqttService {
   // Subscribe to a specific topic
   void subscribeToTopic(String topic) {
     if (client.connectionStatus!.state == MqttConnectionState.connected) {
-      print('Subscribing to topic: $topic');
+
       client.subscribe(topic, MqttQos.atMostOnce);
 
       client.updates!.listen((List<MqttReceivedMessage<MqttMessage?>>? messages) {
         final MqttPublishMessage message = messages![0].payload as MqttPublishMessage;
         final payload = MqttPublishPayload.bytesToStringAsString(message.payload.message);
 
-        print('Received message: $payload from topic: ${messages[0].topic}');
+
 
         if (onMessageReceived != null) {
           onMessageReceived!(payload); // Call the callback with the message

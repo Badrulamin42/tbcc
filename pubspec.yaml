@@ -73,7 +73,7 @@ flutter:
   assets:
   - assets/images/
   - assets/private_key.txt
-  - assets/mqtt_key.pem
+  - assets/mqtt_key.crt
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
