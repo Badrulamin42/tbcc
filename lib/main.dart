@@ -397,7 +397,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               content: SizedBox(
                 width: 400, // Set a fixed width
-                height: 600, // Set a fixed height
+                height: 750, // Set a fixed height
                 child: Stack(
                   children: [
                     // Positioned title from the top
@@ -508,7 +508,7 @@ class _MyHomePageState extends State<MyHomePage> {
                             children: [
                               // QR code container
                               Container(
-                                margin: const EdgeInsets.only(bottom: 10.0), // Extra margin from the bottom if needed
+                                margin: const EdgeInsets.only(bottom: 55.0), // Extra margin from the bottom if needed
                                 decoration: BoxDecoration(
                                   border: Border.all(
                                     color: const Color(0xFFE52561), // Border color (same pinkish-red color)
@@ -533,47 +533,55 @@ class _MyHomePageState extends State<MyHomePage> {
                               ),
 
                               // Rectangle with "Scan code to pay"
-                              Container(
-                                width: screenWidth * 0.8, // Adjust width
-                                padding: const EdgeInsets.symmetric(vertical: 10.0),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE52561), // Pinkish red background
-                                  borderRadius: BorderRadius.circular(8.0), // Optional: Rounded corners
-                                ),
-                                child: Text(
-                                  'Scan code to pay',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16.0,
-                                    fontWeight: FontWeight.bold,
+                              Transform.translate(
+                                offset: const Offset(0, -45), // Move the container 10 units up (negative Y value)
+                                child: Container(
+                                  width: screenWidth * 0.8, // Adjust width
+                                  padding: const EdgeInsets.symmetric(vertical: 10.0),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE52561), // Pinkish red background
+                                    borderRadius: BorderRadius.circular(8.0), // Optional: Rounded corners
                                   ),
-                                  textAlign: TextAlign.center,
+                                  child: Text(
+                                    'Scan code to pay',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16.0,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
                                 ),
                               ),
 
                               // Row of 3 small logos
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Image.asset(
-                                    'assets/images/tnglogo.png', // Replace with logo 1 image path
-                                    height: 40.0, // Small size for the logos
-                                    width: 40.0,
-                                  ),
-                                  SizedBox(width: 10.0), // Space between logos
-                                  Image.asset(
-                                    'assets/images/grabpaylogo.png', // Replace with logo 2 image path
-                                    height: 40.0,
-                                    width: 40.0,
-                                  ),
-                                  SizedBox(width: 10.0),
-                                  Image.asset(
-                                    'assets/images/boostlogo.png', // Replace with logo 3 image path
-                                    height: 40.0,
-                                    width: 40.0,
-                                  ),
-                                ],
-                              ),
+
+                              Transform.translate(
+                                offset: const Offset(0, -20), // Move the Row 10 units up (negative Y value)
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Image.asset(
+                                      'assets/images/tnglogo.png', // Replace with logo 1 image path
+                                      height: 40.0, // Small size for the logos
+                                      width: 40.0,
+                                    ),
+                                    SizedBox(width: 10.0), // Space between logos
+                                    Image.asset(
+                                      'assets/images/grabpaylogo.png', // Replace with logo 2 image path
+                                      height: 40.0,
+                                      width: 40.0,
+                                    ),
+                                    SizedBox(width: 10.0),
+                                    Image.asset(
+                                      'assets/images/boostlogo.png', // Replace with logo 3 image path
+                                      height: 40.0,
+                                      width: 40.0,
+                                    ),
+                                  ],
+                                ),
+                              )
+
                             ],
                           ),
                         ),
