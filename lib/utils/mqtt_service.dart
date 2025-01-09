@@ -37,6 +37,7 @@ class MqttService {
     client.keepAlivePeriod = 60;
     client.secure = true; // Enable secure connection (SSL/TLS)
     client.onDisconnected = onDisconnected;
+    client.autoReconnect = false;
 
     // Load the CA certificate (PEM file) if needed for validation
     try {
@@ -59,6 +60,7 @@ class MqttService {
         print('Connecting to MQTT broker...');
         await client.connect();
         print('Connected to MQTT broker.');
+        print('Connection status: ${client.connectionStatus!.state}');
 
         subscribeToTopic('/TQR/$deviceCode'); // Replace with your topic
       } catch (e) {
@@ -98,6 +100,10 @@ class MqttService {
 
   // Disconnect from the broker
   void disconnect() {
+    if (client.connectionStatus!.state == MqttConnectionState.connected) {
+      client.unsubscribe('/TQR/$deviceCode');
+      print('Unsubscribed from topic: /TQR/$deviceCode');
+    }
     client.disconnect();
     print('Disconnected.');
   }

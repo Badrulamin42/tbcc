@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:convert'; // For JSON encoding/decoding
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show Uint8List, rootBundle;
 import 'package:intl/intl.dart';
+import 'package:usb_serial/usb_serial.dart';
 import 'utils//RSA.dart'; // Import the signature utility file
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'dart:io';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'utils/mqtt_service.dart'; // Import the MQTT service class
+import 'utils/communication.dart';
 
 void main() {
   runApp(const MyApp());
@@ -49,6 +51,10 @@ class _MyHomePageState extends State<MyHomePage> {
   String selectedAmount = ''; // Store the selected amount as state
   String? qrCodeImageUrl;
   String? refId = '';
+  bool ReceivedPayment = false;
+  bool CompletedDispense = false;
+  bool FailedDispense = false;
+  bool ClosingCall = false;
   String Token = '';
   String Signature = '';
 
@@ -68,12 +74,32 @@ class _MyHomePageState extends State<MyHomePage> {
       throw Exception("Error loading private key: $e");
     }
   }
-//api
+
+  //Completing progress
+  void closingStatement() {
+
+
+    setState(() {
+      ClosingCall = true;
+    });
+
+    Future.delayed(Duration(seconds: 2), () {
+      cancelFetchTRX(); // Call the function after the delay
+    });
+    sendData();
+
+    print('closingstatement being called');
+  }
+
+//mqtt
 
   late MqttService mqttService;
 
   @override
   void initState() {
+    if(ReceivedPayment == false){
+
+
 
 
     mqttService = MqttService();
@@ -90,34 +116,47 @@ class _MyHomePageState extends State<MyHomePage> {
         for (var item in parsedMessage) {
           if (item is Map<String, dynamic>) {
             // Extract required fields
-            final commandCode = item['commandcode'] ?? 'Unknown';
-            final result = item['result'] ?? 'Unknown';
+            // final commandCode = item['commandcode'] ?? 'Unknown';
+            // final result = item['result'] ?? 'Unknown';
             final data = item['data'] ?? {};
 
             // Access nested data fields
-            final expiryTime = data['expirytime'] ?? 'Unknown';
-            final amount = data['amount'] ?? 'Unknown';
+            // final expiryTime = data['expirytime'] ?? 'Unknown';
+            // final amount = data['amount'] ?? 'Unknown';
             final referenceId = data['referenceid'] ?? 'Unknown';
 
-            // Print or use the extracted values
-            print('Command Code: $commandCode');
-            print('Result: $result');
-            print('Expiry Time: $expiryTime');
-            print('Amount: $amount');
-            print('Reference ID: $referenceId');
 
             if(referenceId == refId){
 
-              print('User has successfully paid');
-              cancelFetchTRX();
+
+
+
+
+              if(ClosingCall == false)
+                {
+                  closingStatement();
+                  setState(() {
+                    ReceivedPayment = true; // Save the generated QR code URL
+                  });
+                  print('User has successfully paid');
+                }
+
+              mqttService.disconnect();
+
+              // You can also dispose of any other resources if needed here
+
+              Future.delayed(Duration(seconds: 1), () {
+                dispose();
+              });
+              break;
             }
             else{
               print('Wrong Reference ID!!!');
             }
 
               // If you've got what you need, you can break out of the loop
-              dispose();
-            break;
+              // dispose();
+
 
           }
 
@@ -127,6 +166,10 @@ class _MyHomePageState extends State<MyHomePage> {
       }
 
     });
+    }
+    else{
+      print('Progress already completed');
+    }
   }
 
   @override
@@ -134,6 +177,36 @@ class _MyHomePageState extends State<MyHomePage> {
     mqttService.disconnect();
 
   }
+
+  //COM
+
+  late Communication communication;
+
+  String status = 'Initializing...';
+
+
+
+  Future<void> sendData() async {
+    communication = await Communication();
+
+    String result = await communication.openPort();
+
+    if(result == 'Completed') {
+      setState(() {
+        CompletedDispense = true;
+      });
+
+    }
+    else{
+
+      setState(() {
+        FailedDispense = true;
+      });
+    }
+  }
+
+
+
 
   String generateReferenceId() {
     const prefix = "24D7EB69ACD0"; // Fixed prefix
@@ -196,55 +269,65 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> cancelFetchTRX() async {
 
-    final privateKeyPem = await loadPrivateKey();
-    final payloadcanceltrx = {
-      "commandcode": "DI_SetTransactionEWalletV2",
-      "devicecode": deviceCode,
-      "data": [
-        {
-          "statusstarttime": getFormattedDateTime(),
-          "machineid": "W1",
-          "status": "Payment",
-          "eutdcounter": selectedAmount,
-          "eamount": selectedAmount,
-          "eoriginalamount": selectedAmount,
-          "discount": "0",
-          "discountentitlementamount": "0.00",
-          "qrcode": "",
-          "ewallettransactionid": refId,
-          "ewallettypecode": "DUITNOW",
-          "numberofinquiry": "0",
-          "duration": "0/175",
-          "errorcode": "255",
-          "errormessage": "USER CANCELLED",
-          "ewallettestusercode": "",
-          "responsetime": "2",
-          "rssi": rssi
-        }
-      ]
-    };
-    String signature =
-    await generateSignature(jsonEncode(payloadcanceltrx), privateKeyPem);
-    try {
-      final responseTRXEW = await http.post(
-        Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Token': Token,
-          'Signature': signature
-        },
-        body: json.encode(payloadcanceltrx),
-      );
+    if(ReceivedPayment){
+      print('Payment has Received, closing QR modal, Ignore Fetch CancelTRX');
 
-      if (responseTRXEW.statusCode == 200) {
-        print('Transaction cancelled successfully');
-      } else {
-        print('Failed to cancel transaction. Status code: ${responseTRXEW.statusCode}');
-
-      }
-    } catch (err) {
-      print('Error during fetch cancel trx: $err');
     }
+
+  else{
+
+      final privateKeyPem = await loadPrivateKey();
+      final payloadcanceltrx = {
+        "commandcode": "DI_SetTransactionEWalletV2",
+        "devicecode": deviceCode,
+        "data": [
+          {
+            "statusstarttime": getFormattedDateTime(),
+            "machineid": "W1",
+            "status": "Payment",
+            "eutdcounter": selectedAmount,
+            "eamount": selectedAmount,
+            "eoriginalamount": selectedAmount,
+            "discount": "0",
+            "discountentitlementamount": "0.00",
+            "qrcode": "",
+            "ewallettransactionid": refId,
+            "ewallettypecode": "DUITNOW",
+            "numberofinquiry": "0",
+            "duration": "0/175",
+            "errorcode": "255",
+            "errormessage": "USER CANCELLED",
+            "ewallettestusercode": "",
+            "responsetime": "2",
+            "rssi": rssi
+          }
+        ]
+      };
+      String signature =
+      await generateSignature(jsonEncode(payloadcanceltrx), privateKeyPem);
+      try {
+        final responseTRXEW = await http.post(
+          Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Token': Token,
+            'Signature': signature
+          },
+          body: json.encode(payloadcanceltrx),
+        );
+
+        if (responseTRXEW.statusCode == 200) {
+          print('Transaction cancelled successfully');
+        } else {
+          print('Failed to cancel transaction. Status code: ${responseTRXEW.statusCode}');
+
+        }
+      } catch (err) {
+        print('Error during fetch cancel trx: $err');
+      }
+
+    }
+
   }
 
   Future<void> handleButtonPress({
@@ -297,7 +380,7 @@ class _MyHomePageState extends State<MyHomePage> {
           "data": [
             {
               "referenceid": referenceId,
-              "eamount": amount,
+              "eamount": "1.00",
               "validityduration": "120",
               "rssi": "-39"
             }
@@ -370,7 +453,9 @@ class _MyHomePageState extends State<MyHomePage> {
           );
 
           final TRXEWResponseData = json.decode(response.body);
+
           initState();
+
 
         } else {
           print('TRXEW error: no QR');
@@ -438,6 +523,13 @@ class _MyHomePageState extends State<MyHomePage> {
             if (timer == null) {
               startCountdown(setState);
             }
+
+            if (ReceivedPayment) {
+              timer?.cancel(); // Cancel the timer if the payment is received
+              Navigator.of(context).pop(); // Close the modal
+
+            }
+
             return AlertDialog(
               insetPadding:
                   const EdgeInsets.symmetric(horizontal: 40, vertical: 130),
@@ -972,6 +1064,64 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ),
           // Loading overlay
+          if (ReceivedPayment)
+            Container(
+              color: Colors.black.withOpacity(0.5), // Semi-transparent background
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(20), // Add padding inside the box
+                  decoration: BoxDecoration(
+                    color: Colors.white, // White background for the box
+                    borderRadius: BorderRadius.circular(12), // Rounded corners
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min, // Ensures the content takes minimum space
+                    crossAxisAlignment: CrossAxisAlignment.center, // Center the content horizontally
+                    children: [
+                      // Use AnimatedOpacity to animate the checkmark icon
+                      AnimatedOpacity(
+                        opacity: ReceivedPayment ? 1.0 : 0,
+                        duration: const Duration(milliseconds: 1000), // Animation duration
+                        child: Icon(
+                          Icons.check_circle_outline,
+                          color: Colors.green, // Green color for success
+                          size: 50, // Icon size
+                        ),
+                      ),
+                      const SizedBox(height: 16), // Space between the progress indicator and text
+                      if(CompletedDispense == false)
+                      const Text(
+                        'Payment Received',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16), // Space between the progress indicator and text
+                      if(CompletedDispense == false)
+                      const Text(
+                        'Dispensing token...',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if(CompletedDispense == true)
+                        const Text(
+                          'Completed',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           if (isLoading)
             Container(
               color:
