@@ -13,7 +13,7 @@ import 'utils/mqtt_service.dart'; // Import the MQTT service class
 import 'utils/communication.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
 bool isLoading = false;
@@ -25,6 +25,8 @@ const ivString = '0192006944061854'; // Must be 16 characters
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +45,8 @@ class MyHomePage extends StatefulWidget {
 
   @override
   _MyHomePageState createState() => _MyHomePageState();
+
+
 }
 
 
@@ -57,6 +61,8 @@ class _MyHomePageState extends State<MyHomePage> {
   bool ClosingCall = false;
   String Token = '';
   String Signature = '';
+
+
 
   String readPrivateKey(String filePath) {
     return File(filePath).readAsStringSync();
@@ -76,17 +82,28 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   //Completing progress
-  void closingStatement() {
+  void closingStatement() async {
 
 
     setState(() {
       ClosingCall = true;
     });
 
-    Future.delayed(Duration(seconds: 2), () {
-      cancelFetchTRX(); // Call the function after the delay
+   await sendData('Req10');
+
+
+  await Future.delayed(Duration(seconds: 3), () {
+      // cancelFetchTRX(); // Call the function after the delay
+
+      setState(() {
+        ReceivedPayment = false;
+        CompletedDispense = false;
+        FailedDispense = false;
+        ClosingCall = false;
+      });
     });
-    sendData();
+
+
 
     print('closingstatement being called');
   }
@@ -97,17 +114,29 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   void initState() {
-    if(ReceivedPayment == false){
+    super.initState();
+    print('initState called');
+    communication = Communication();
+    communication.connect().then((connected) {
+      if (!connected) {
+        print('Failed to connect to the port.');
+      } else {
+        print('Connected successfully');
+      }
+    }).catchError((e) {
+      print('Error connecting: $e');
+    });
 
 
+}
 
+  @override
+  void mqttConn() {
 
     mqttService = MqttService();
 
-    mqttService.connect(onMessageReceivedCallback: (message) {
-      // Handle received MQTT messages here
-      print('Message received in MainPage: $message');
-
+    mqttService.connect(onMessageReceivedCallback: (message)
+    {
       try {
         // Parse the JSON string into a Dart object (List<dynamic>)
         List<dynamic> parsedMessage = jsonDecode(message);
@@ -126,50 +155,39 @@ class _MyHomePageState extends State<MyHomePage> {
             final referenceId = data['referenceid'] ?? 'Unknown';
 
 
-            if(referenceId == refId){
+            if (referenceId == refId) {
+              if (ClosingCall == false) {
+                closingStatement();
+                setState(() {
+                  ReceivedPayment = true; // Save the generated QR code URL
+                });
+                print('User has successfully paid');
+              }
 
-
-
-
-
-              if(ClosingCall == false)
-                {
-                  closingStatement();
-                  setState(() {
-                    ReceivedPayment = true; // Save the generated QR code URL
-                  });
-                  print('User has successfully paid');
-                }
-
-              mqttService.disconnect();
+              // mqttService.disconnect();
 
               // You can also dispose of any other resources if needed here
 
-              Future.delayed(Duration(seconds: 1), () {
-                dispose();
-              });
+              // Future.delayed(Duration(seconds: 1), () {
+              dispose();
+              // });
               break;
             }
-            else{
+            else {
               print('Wrong Reference ID!!!');
             }
 
-              // If you've got what you need, you can break out of the loop
-              // dispose();
+            // If you've got what you need, you can break out of the loop
+            // dispose();
 
 
           }
-
         }
       } catch (e) {
         print('Error parsing message: $e');
       }
-
     });
-    }
-    else{
-      print('Progress already completed');
-    }
+
   }
 
   @override
@@ -180,16 +198,19 @@ class _MyHomePageState extends State<MyHomePage> {
 
   //COM
 
-  late Communication communication;
 
   String status = 'Initializing...';
+  late Communication communication;
+
+  // Connect to the port once
 
 
 
-  Future<void> sendData() async {
-    communication = await Communication();
 
-    String result = await communication.openPort();
+  Future<void> sendData(String command) async {
+
+
+    String result = await communication.main(command);
 
     if(result == 'Completed') {
       setState(() {
@@ -454,7 +475,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
           final TRXEWResponseData = json.decode(response.body);
 
-          initState();
+          mqttConn(); // call mqtt
 
 
         } else {
@@ -1020,6 +1041,66 @@ class _MyHomePageState extends State<MyHomePage> {
                           textAlign: TextAlign.center,
                         ),
                       ), //4
+
+                      ElevatedButton(
+                        onPressed: () {
+
+                          sendData('Req10');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: Size(200, 150),
+                          backgroundColor: Colors.blue.shade50,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'req dispense 10',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Arial',
+                                  color: Colors.lightBlue,
+                                ),
+                              ),
+
+                            ],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ), //test
+                      ElevatedButton(
+                        onPressed: () {
+                          sendData('Dis10');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: Size(200, 150),
+                          backgroundColor: Colors.blue.shade50,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'Dis 10',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Arial',
+                                  color: Colors.lightBlue,
+                                ),
+                              ),
+
+                            ],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ), //test
                     ],
                   ),
                   const SizedBox(height: 100),

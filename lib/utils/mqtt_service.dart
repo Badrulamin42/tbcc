@@ -74,7 +74,7 @@ class MqttService {
 
   // Handle the disconnect event
   void onDisconnected() {
-    print('Disconnected from the MQTT broker.');
+    // print('Disconnected from the MQTT broker.');
   }
 
   // Subscribe to a specific topic
