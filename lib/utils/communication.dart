@@ -15,6 +15,7 @@ class Communication {
   final String portName = 'COM5'; // Replace with the actual port name
   late SerialPort port;
   bool isConnected = false;
+  bool isSoldOut = false;
   int dispenseAmount = 0;
   //init
   Communication() {
@@ -246,12 +247,123 @@ class Communication {
             'Reply sent: ${discom.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       }
 
-      // if()
+      // handle soldout
+      if (_listEquals(data, resSoldOut)) {
+        print('Expected response received (soldout). Sending reply...');
+        isSoldOut = true;
+
+        // Send the reply message
+        port.write(resSoldOut2);
+        print(
+            'Reply sent: ${resSoldOut2.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      }
+
+      // Dispensing Check if the response starts with the valid start byte
+      if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x0C && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x20) {
+        print("Dispensing.");
+
+        // Check if the response length is correct
+        if (data.length == 15) {
+
+
+          // Decode dynamic data
+          int cashValue = data[5] |
+          (data[6] << 8) |
+          (data[7] << 16) |
+          (data[8] << 24); // 6th-9th byte
+
+          int totalNeeded = data[9] | (data[10] << 8); // 10th-11th byte
+
+          int RemainingtoDispense = data[11] | (data[12] << 8); // 12th-13th byte
+
+          // Print decoded values
+          print("Cash Value: $cashValue");
+          print("Total Needed to Dispense: $totalNeeded");
+          print("Remaining to Dispense: $RemainingtoDispense");
+
+
+        } else {
+          print("Invalid response length.");
+        }
+      }
+      //UTD QR
+      if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x13 && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x05
+      ) {
+        print("Dispensed, QR UTD here.");
+
+        // Check if the response length is correct
+        if (data.length == 22) {
+
+
+          // Decode dynamic data
+          int QRDispenseCounter = data[15] |
+          (data[16] << 8);
+
+          int UTDQRDispenseCounter = data[17] |
+          (data[18] << 8)|
+          (data[19] << 16) |
+          (data[20] << 24); // 10th-11th byte
+
+          // Print decoded values
+          print("Qr Dispense Counter: $QRDispenseCounter");
+          print("UTD qr Dispense Counter: $UTDQRDispenseCounter");
+
+
+        } else {
+          print("Invalid response length.");
+        }
+      }
+
+      //UTD cash
+      if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x19 && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x06
+      ) {
+        print("Dispensed, Cash UTD here.");
+
+        // Check if the response length is correct
+        if (data.length == 28) {
+
+
+          // Decode dynamic data
+          int CASHDispenseCounter = data[12] |
+          (data[13] << 8);
+
+
+          int UTDCASHDispenseCounter = data[14] |
+          (data[15] << 8)|
+          (data[16] << 16) |
+          (data[17] << 24); // 10th-11th byte
+
+          int CASHCounter = data[19] |
+          (data[20] << 8)|
+          (data[21] << 16) |
+          (data[22] << 24); // 10th-11th byte
+
+          int UTDCASHCounter = data[23] |
+          (data[24] << 8)|
+          (data[25] << 16) |
+          (data[26] << 24); // 10th-11th byte
+
+          // Print decoded values
+          print("Cash Dispense Counter: $CASHDispenseCounter");
+          print("UTD Cash Dispense Counter: $UTDCASHDispenseCounter");
+          print("Cash Counter: $CASHCounter");
+          print("UTD Cash Counter: $UTDCASHCounter");
+
+
+        } else {
+          print("Invalid response length.");
+        }
+      }
+
+
     });
   }
 
   // Main function to control the flow of communication
   Future<String> main(String command) async {
+
+    int timing = 2000; // default for 10coin
+
     // // Connect to the port once
     // bool connected = await comm.connect();
     // if (!connected) {
@@ -278,26 +390,65 @@ class Communication {
       0xDD
     ]);
 
+    // Define UTDQR
+    Uint8List UTDQR = Uint8List.fromList([
+      0xAA,
+      0x04,
+      0x02,
+      0xD1,
+      0x05,
+      0xD1,
+      0xDD,
+
+    ]);
+
+    Uint8List UTDCASH = Uint8List.fromList([
+      0xAA,
+      0x04,
+      0x01,
+      0xD1,
+      0x06,
+      0xD2,
+      0xDD,
+
+    ]);
+
     // Send data based on command
     if (command == 'Req10') {
+      timing = 1000;
       dispenseAmount = 10;
       print('Sending RequestDispense10');
       await sendData(requestDispense);
     }
     else if(command == 'Req20'){
+      timing = 2500;
       dispenseAmount = 20;
       print('Sending RequestDispense20');
       await sendData(requestDispense);
     }
     else if(command == 'Req50'){
+      timing = 4000;
       dispenseAmount = 50;
       print('Sending RequestDispense50');
       await sendData(requestDispense);
     }
     else if(command == 'Req100'){
+      timing = 6500;
       dispenseAmount = 100;
       print('Sending RequestDispense100');
       await sendData(requestDispense);
+    }
+    else if(command == 'UTDQR'){
+
+
+      print('Sending UTDQR');
+      await sendData(UTDQR);
+    }
+    else if(command == 'UTDCASH'){
+
+
+      print('Sending UTDCASH');
+      await sendData(UTDCASH);
     }
 
     else {
@@ -305,8 +456,13 @@ class Communication {
     }
 
     // Optional: Disconnect after communication
-    await Future.delayed(Duration(milliseconds: 3000)); // Adjust if needed
+    await Future.delayed(Duration(milliseconds: timing)); // Adjust if needed
     // comm.disconnect();
+
+    if(isSoldOut) {
+      isSoldOut = false;
+      return 'Failed';
+    }
 
     return 'Completed';
   }

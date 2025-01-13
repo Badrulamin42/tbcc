@@ -84,26 +84,77 @@ class _MyHomePageState extends State<MyHomePage> {
   //Completing progress
   void closingStatement() async {
 
+    String amounttodis = "0";
+    if(selectedAmount == "10.00"){
+      amounttodis = "Req10";
+    }
+
+    else if(selectedAmount == "20.00"){
+      amounttodis = "Req20";
+    }
+
+    else if(selectedAmount == "50.00"){
+      amounttodis = "Req50";
+    }
+
+    else if(selectedAmount == "100.00"){
+      amounttodis = "Req100";
+    }
+
+    else{
+      return;
+    }
 
     setState(() {
       ClosingCall = true;
     });
 
-   await sendData('Req10');
+   bool resultdis = await sendData(amounttodis);
+
+   if(resultdis)
+     {
+       setState(() {
+
+         FailedDispense = false;
+
+         ClosingCall = false;
+
+       });
+
+       //fetch success api
+
+     }
+
+   //failed dispense
+   else{
+     setState(() {
+
+       FailedDispense = true;
+
+       ClosingCall = false;
+
+     });
+
+     //fetch refund api / cancel trx
+
+   }
+
+    await Future.delayed(Duration(seconds: 2), () {
+      setState(() {
+        CompletedDispense = FailedDispense ? false : true;
+      });
 
 
-  await Future.delayed(Duration(seconds: 3), () {
-      // cancelFetchTRX(); // Call the function after the delay
 
+    });
+
+    await Future.delayed(Duration(seconds: 4), () {
       setState(() {
         ReceivedPayment = false;
         CompletedDispense = false;
         FailedDispense = false;
-        ClosingCall = false;
       });
     });
-
-
 
     print('closingstatement being called');
   }
@@ -171,7 +222,9 @@ class _MyHomePageState extends State<MyHomePage> {
               // Future.delayed(Duration(seconds: 1), () {
               dispose();
               // });
+
               break;
+
             }
             else {
               print('Wrong Reference ID!!!');
@@ -207,22 +260,20 @@ class _MyHomePageState extends State<MyHomePage> {
 
 
 
-  Future<void> sendData(String command) async {
+  Future<bool> sendData(String command) async {
 
 
     String result = await communication.main(command);
 
     if(result == 'Completed') {
-      setState(() {
-        CompletedDispense = true;
-      });
 
+
+      return true;
     }
     else{
 
-      setState(() {
-        FailedDispense = true;
-      });
+
+      return false;
     }
   }
 
@@ -1045,7 +1096,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       ElevatedButton(
                         onPressed: () {
 
-                          sendData('Req10');
+                          sendData('UTDQR');
                         },
                         style: ElevatedButton.styleFrom(
                           minimumSize: Size(200, 150),
@@ -1058,7 +1109,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           TextSpan(
                             children: [
                               TextSpan(
-                                text: 'req dispense 10',
+                                text: 'test utdqr',
                                 style: TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
@@ -1072,35 +1123,35 @@ class _MyHomePageState extends State<MyHomePage> {
                           textAlign: TextAlign.center,
                         ),
                       ), //test
-                      ElevatedButton(
-                        onPressed: () {
-                          sendData('Dis10');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: Size(200, 150),
-                          backgroundColor: Colors.blue.shade50,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: 'Dis 10',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Arial',
-                                  color: Colors.lightBlue,
-                                ),
-                              ),
-
-                            ],
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ), //test
+                      // ElevatedButton(
+                      //   onPressed: () {
+                      //     sendData('Dis10');
+                      //   },
+                      //   style: ElevatedButton.styleFrom(
+                      //     minimumSize: Size(200, 150),
+                      //     backgroundColor: Colors.blue.shade50,
+                      //     shape: RoundedRectangleBorder(
+                      //       borderRadius: BorderRadius.circular(12),
+                      //     ),
+                      //   ),
+                      //   child: const Text.rich(
+                      //     TextSpan(
+                      //       children: [
+                      //         TextSpan(
+                      //           text: 'Dis 10',
+                      //           style: TextStyle(
+                      //             fontSize: 24,
+                      //             fontWeight: FontWeight.bold,
+                      //             fontFamily: 'Arial',
+                      //             color: Colors.lightBlue,
+                      //           ),
+                      //         ),
+                      //
+                      //       ],
+                      //     ),
+                      //     textAlign: TextAlign.center,
+                      //   ),
+                      // ), //test
                     ],
                   ),
                   const SizedBox(height: 100),
@@ -1163,14 +1214,14 @@ class _MyHomePageState extends State<MyHomePage> {
                       AnimatedOpacity(
                         opacity: ReceivedPayment ? 1.0 : 0,
                         duration: const Duration(milliseconds: 1000), // Animation duration
-                        child: Icon(
-                          Icons.check_circle_outline,
-                          color: Colors.green, // Green color for success
+                        child: Icon( CompletedDispense == false && FailedDispense == true ?
+                        Icons.cancel : Icons.check_circle_outline,
+                          color: CompletedDispense == false && FailedDispense == true ? Colors.red : Colors.green, // Green color for success
                           size: 50, // Icon size
                         ),
                       ),
                       const SizedBox(height: 16), // Space between the progress indicator and text
-                      if(CompletedDispense == false)
+                      if(CompletedDispense == false && FailedDispense == false)
                       const Text(
                         'Payment Received',
                         style: TextStyle(
@@ -1180,18 +1231,27 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                       ),
                       const SizedBox(height: 16), // Space between the progress indicator and text
-                      if(CompletedDispense == false)
+                      if(CompletedDispense == false && FailedDispense == false)
                       const Text(
-                        'Dispensing token...',
+                        'Please wait, Dispensing token...',
                         style: TextStyle(
                           color: Colors.black,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      if(CompletedDispense == true)
+                      if(CompletedDispense == true && FailedDispense == false)
                         const Text(
-                          'Completed',
+                          'Completed! Thank You',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      if(CompletedDispense == false && FailedDispense == true)
+                        const Text(
+                          'Dispensing Failed, Token out of Stock.',
                           style: TextStyle(
                             color: Colors.black,
                             fontSize: 16,
