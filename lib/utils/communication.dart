@@ -11,12 +11,21 @@ bool _listEquals(Uint8List a, Uint8List b) {
   return true;
 }
 
+class Result {
+  final bool success;
+  final String message;
+  Result({required this.success, required this.message});
+}
+
 class Communication {
-  final String portName = '/dev/ttyS3'; // Replace with the actual port name android /dev/ttyS3
+  final String portName = 'COM5'; // Replace with the actual port name android /dev/ttyS3
   late SerialPort port;
   bool isConnected = false;
   bool isSoldOut = false;
+  bool isCompleteDispense = false;
   int dispenseAmount = 0;
+  int UtdQr = 0;
+  int UtdCash = 0;
   //init
   Communication() {
     port = SerialPort(portName);
@@ -248,7 +257,7 @@ class Communication {
       }
 
       // handle soldout
-      if (_listEquals(data, resSoldOut)) {
+      if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x0F && data[2] == 0x02 && data[3] == 0x14) {
         print('Expected response received (soldout). Sending reply...');
         isSoldOut = true;
 
@@ -281,6 +290,11 @@ class Communication {
           print("Total Needed to Dispense: $totalNeeded");
           print("Remaining to Dispense: $RemainingtoDispense");
 
+          if(RemainingtoDispense == 0)
+            {
+              isCompleteDispense = true;
+            }
+
 
         } else {
           print("Invalid response length.");
@@ -308,6 +322,7 @@ class Communication {
           print("Qr Dispense Counter: $QRDispenseCounter");
           print("UTD qr Dispense Counter: $UTDQRDispenseCounter");
 
+          UtdQr = UTDQRDispenseCounter;
 
         } else {
           print("Invalid response length.");
@@ -349,6 +364,7 @@ class Communication {
           print("Cash Counter: $CASHCounter");
           print("UTD Cash Counter: $UTDCASHCounter");
 
+          UtdCash = UTDCASHDispenseCounter;
 
         } else {
           print("Invalid response length.");
@@ -360,7 +376,7 @@ class Communication {
   }
 
   // Main function to control the flow of communication
-  Future<String> main(String command) async {
+  Future<Result> main(String command) async {
 
     int timing = 2000; // default for 10coin
 
@@ -461,10 +477,27 @@ class Communication {
 
     if(isSoldOut) {
       isSoldOut = false;
-      return 'Failed';
+      return Result(success: false, message: '1');
     }
 
-    return 'Completed';
+    const int maxRetries = 3; // Maximum retries
+    int retries = 0;
+
+    // Retry until isCompleteDispense becomes true or retries exceed maxRetries
+    while (retries < maxRetries) {
+      if (isCompleteDispense) {
+        // If isCompleteDispense becomes true, return 'Completed'
+        isCompleteDispense = false; // Reset the flag for future operations
+        return Result(success: true, message: '0');
+      }
+
+      // Wait for the specified interval before retrying
+      await Future.delayed(Duration(milliseconds: 5000));
+      retries++;
+    }
+
+    // If retries exceed maxRetries, return 'Failed'
+    return Result(success: false, message: '2');
   }
 
   //help & reply generator
@@ -507,10 +540,10 @@ class Communication {
       command[13] = 0x14; // Set the 10th element to hexadecimal 0x14
     }
     else if(dispenseAmount == 50){
-      command[10] = 0x32; // Set the 10th element to hexadecimal 0x14
+      command[13] = 0x32; // Set the 10th element to hexadecimal 0x14
     }
     else if(dispenseAmount == 100){
-      command[10] = 0x64; // Set the 10th element to hexadecimal 0x14
+      command[13] = 0x64; // Set the 10th element to hexadecimal 0x14
     }
     else {
       command[13] = 0x00;

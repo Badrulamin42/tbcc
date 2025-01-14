@@ -61,7 +61,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool ClosingCall = false;
   String Token = '';
   String Signature = '';
-
+  String Errormsg = '';
   // Request permissions
   void requestPermissions() async {
     // Request multiple permissions
@@ -280,15 +280,22 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<bool> sendData(String command) async {
 
 
-    String result = await communication.main(command);
+    Result result = await communication.main(command);
 
-    if(result == 'Completed') {
-
+    if(result.success == true) {
 
       return true;
     }
     else{
+      setState(() {
+        if(result.message == '1'){
+          Errormsg = 'Token out of Stock';
+        }
+        else{
+          Errormsg =  'Timeout';
+        }
 
+      });
 
       return false;
     }
@@ -628,8 +635,8 @@ class _MyHomePageState extends State<MyHomePage> {
                 borderRadius: BorderRadius.circular(10.0), // Adjust radius here
               ),
               content: SizedBox(
-                width: 600, // Set a fixed width
-                height: 1000, // Set a fixed height
+                width: 425, // Set a fixed width
+                height: 750, // Set a fixed height
                 child: Stack(
                   children: [
                     // Positioned title from the top
@@ -768,7 +775,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               Transform.translate(
                                 offset: const Offset(0, -45), // Move the container 10 units up (negative Y value)
                                 child: Container(
-                                  width: screenWidth * 0.8, // Adjust width
+                                  width: screenWidth, // Adjust width
                                   padding: const EdgeInsets.symmetric(vertical: 10.0),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFE52561), // Pinkish red background
@@ -889,7 +896,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   const Text(
                     'Coin Purchase Package',
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 36,
                       fontWeight: FontWeight.bold,
                       color: Colors.lightBlue,
                       fontFamily: 'Arial', // Apply Arial-like font
@@ -899,7 +906,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   const Text(
                     'Select the Package or insert cash to pay, the coin will be dispensed once the payment is done.',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 26,
                       color: Colors.lightBlueAccent,
                       fontFamily: 'Arial', // Apply Arial-like font
                     ),
@@ -942,7 +949,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               TextSpan(
                                 text: '10 ',
                                 style: TextStyle(
-                                  fontSize: 24, // Larger size for "10"
+                                  fontSize: 32, // Larger size for "10"
                                   fontWeight: FontWeight.bold, // Bold text
                                   fontFamily: 'Arial', // Apply Arial-like font
                                   color: Colors.lightBlue,
@@ -952,7 +959,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                 text:
                                     'Coins\nMYR 10.00', // Line break and the rest of the text
                                 style: TextStyle(
-                                  fontSize: 18, // Smaller size for "MYR 10"
+                                  fontSize: 26, // Smaller size for "MYR 10"
                                   fontWeight: FontWeight
                                       .normal, // Regular weight for the rest
                                   color: Colors.lightBlue,
@@ -993,7 +1000,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               TextSpan(
                                 text: '20 ',
                                 style: TextStyle(
-                                  fontSize: 24,
+                                  fontSize: 32,
                                   fontWeight: FontWeight.bold,
                                   fontFamily: 'Arial',
                                   color: Colors.lightBlue,
@@ -1002,7 +1009,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               TextSpan(
                                 text: 'Coins\nMYR 20.00',
                                 style: TextStyle(
-                                  fontSize: 18,
+                                  fontSize: 26,
                                   fontWeight: FontWeight.normal,
                                   color: Colors.lightBlue,
                                 ),
@@ -1041,7 +1048,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               TextSpan(
                                 text: '50 ',
                                 style: TextStyle(
-                                  fontSize: 24,
+                                  fontSize: 32,
                                   fontWeight: FontWeight.bold,
                                   fontFamily: 'Arial',
                                   color: Colors.lightBlue,
@@ -1050,7 +1057,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               TextSpan(
                                 text: 'Coins\nMYR 50.00',
                                 style: TextStyle(
-                                  fontSize: 18,
+                                  fontSize: 26,
                                   fontWeight: FontWeight.normal,
                                   color: Colors.lightBlue,
                                 ),
@@ -1090,7 +1097,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               TextSpan(
                                 text: '100 ',
                                 style: TextStyle(
-                                  fontSize: 24,
+                                  fontSize: 32,
                                   fontWeight: FontWeight.bold,
                                   fontFamily: 'Arial',
                                   color: Colors.lightBlue,
@@ -1099,7 +1106,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               TextSpan(
                                 text: 'Coins\nMYR 100',
                                 style: TextStyle(
-                                  fontSize: 18,
+                                  fontSize: 26,
                                   fontWeight: FontWeight.normal,
                                   color: Colors.lightBlue,
                                 ),
@@ -1180,7 +1187,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         Text(
                           'Warm Tips',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: Colors.grey,
                             fontFamily: 'Arial',
@@ -1190,7 +1197,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         Text(
                           '1. Once the coins are dispensed, no refund request will be accepted.',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Colors.grey,
                             fontFamily: 'Arial',
@@ -1199,7 +1206,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         Text(
                           '2. Any question feel free to contact: 0173990160.',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Colors.grey,
                             fontFamily: 'Arial',
@@ -1267,9 +1274,10 @@ class _MyHomePageState extends State<MyHomePage> {
                           ),
                         ),
                       if(CompletedDispense == false && FailedDispense == true)
-                        const Text(
-                          'Dispensing Failed, Token out of Stock.',
-                          style: TextStyle(
+
+                        Text(
+                          'Dispensing Failed, ' + Errormsg,
+                          style: const TextStyle(
                             color: Colors.black,
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
