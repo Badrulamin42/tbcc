@@ -4,13 +4,13 @@ import 'package:http/http.dart' as http;
 import 'dart:convert'; // For JSON encoding/decoding
 import 'package:flutter/services.dart' show Uint8List, rootBundle;
 import 'package:intl/intl.dart';
-import 'package:usb_serial/usb_serial.dart';
 import 'utils//RSA.dart'; // Import the signature utility file
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'dart:io';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'utils/mqtt_service.dart'; // Import the MQTT service class
 import 'utils/communication.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   runApp(MyApp());
@@ -62,7 +62,22 @@ class _MyHomePageState extends State<MyHomePage> {
   String Token = '';
   String Signature = '';
 
+  // Request permissions
+  void requestPermissions() async {
+    // Request multiple permissions
+    await Permission.camera.request();
+    await Permission.location.request();
+    await Permission.bluetooth.request();
 
+    // Check if permissions are granted and handle accordingly
+    if (await Permission.camera.isGranted &&
+        await Permission.location.isGranted &&
+        await Permission.bluetooth.isGranted) {
+      print("All permissions granted");
+    } else {
+      print("Permissions not granted");
+    }
+  }
 
   String readPrivateKey(String filePath) {
     return File(filePath).readAsStringSync();
@@ -166,7 +181,9 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
+    requestPermissions();
     print('initState called');
+
     communication = Communication();
     communication.connect().then((connected) {
       if (!connected) {
@@ -611,8 +628,8 @@ class _MyHomePageState extends State<MyHomePage> {
                 borderRadius: BorderRadius.circular(10.0), // Adjust radius here
               ),
               content: SizedBox(
-                width: 400, // Set a fixed width
-                height: 750, // Set a fixed height
+                width: 600, // Set a fixed width
+                height: 1000, // Set a fixed height
                 child: Stack(
                   children: [
                     // Positioned title from the top
@@ -1093,36 +1110,36 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                       ), //4
 
-                      ElevatedButton(
-                        onPressed: () {
-
-                          sendData('UTDQR');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: Size(200, 150),
-                          backgroundColor: Colors.blue.shade50,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: 'test utdqr',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Arial',
-                                  color: Colors.lightBlue,
-                                ),
-                              ),
-
-                            ],
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ), //test
+                      // ElevatedButton(
+                      //   onPressed: () {
+                      //
+                      //     sendData('UTDQR');
+                      //   },
+                      //   style: ElevatedButton.styleFrom(
+                      //     minimumSize: Size(200, 150),
+                      //     backgroundColor: Colors.blue.shade50,
+                      //     shape: RoundedRectangleBorder(
+                      //       borderRadius: BorderRadius.circular(12),
+                      //     ),
+                      //   ),
+                      //   child: const Text.rich(
+                      //     TextSpan(
+                      //       children: [
+                      //         TextSpan(
+                      //           text: 'test utdqr',
+                      //           style: TextStyle(
+                      //             fontSize: 24,
+                      //             fontWeight: FontWeight.bold,
+                      //             fontFamily: 'Arial',
+                      //             color: Colors.lightBlue,
+                      //           ),
+                      //         ),
+                      //
+                      //       ],
+                      //     ),
+                      //     textAlign: TextAlign.center,
+                      //   ),
+                      // ), //test
                       // ElevatedButton(
                       //   onPressed: () {
                       //     sendData('Dis10');

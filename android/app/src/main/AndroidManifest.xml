@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ <!-- Add USB permission before the <application> element -->
+<uses-permission android:name="android.permission.SERIAL_PORT"/>
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+<uses-permission android:name="android.permission.CAMERA"/>
+<uses-permission android:name="android.permission.BLUETOOTH"/>
     <application
         android:label="tbcc"
         android:name="${applicationName}"

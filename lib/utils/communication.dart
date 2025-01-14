@@ -1,7 +1,7 @@
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:async';
-import 'package:libserialport/libserialport.dart';
+import 'package:flutter_libserialport/flutter_libserialport.dart';
 
 bool _listEquals(Uint8List a, Uint8List b) {
   if (a.length != b.length) return false;
@@ -12,7 +12,7 @@ bool _listEquals(Uint8List a, Uint8List b) {
 }
 
 class Communication {
-  final String portName = 'COM5'; // Replace with the actual port name
+  final String portName = '/dev/ttyS3'; // Replace with the actual port name android /dev/ttyS3
   late SerialPort port;
   bool isConnected = false;
   bool isSoldOut = false;
@@ -296,13 +296,13 @@ class Communication {
 
 
           // Decode dynamic data
-          int QRDispenseCounter = data[15] |
-          (data[16] << 8);
+          int QRDispenseCounter = data[14] |
+          (data[15] << 8);
 
-          int UTDQRDispenseCounter = data[17] |
-          (data[18] << 8)|
-          (data[19] << 16) |
-          (data[20] << 24); // 10th-11th byte
+          int UTDQRDispenseCounter = data[16] |
+          (data[17] << 8) |
+          (data[18] << 16) |
+          (data[19] << 24); // Correct byte order for little-endian
 
           // Print decoded values
           print("Qr Dispense Counter: $QRDispenseCounter");
@@ -324,24 +324,24 @@ class Communication {
 
 
           // Decode dynamic data
-          int CASHDispenseCounter = data[12] |
-          (data[13] << 8);
+          int CASHDispenseCounter = data[11] |
+          (data[12] << 8);
 
 
-          int UTDCASHDispenseCounter = data[14] |
-          (data[15] << 8)|
-          (data[16] << 16) |
-          (data[17] << 24); // 10th-11th byte
+          int UTDCASHDispenseCounter = data[13] |
+          (data[14] << 8)|
+          (data[15] << 16) |
+          (data[16] << 24); // 10th-11th byte
 
-          int CASHCounter = data[19] |
-          (data[20] << 8)|
-          (data[21] << 16) |
-          (data[22] << 24); // 10th-11th byte
+          int CASHCounter = data[18] |
+          (data[19] << 8)|
+          (data[20] << 16) |
+          (data[21] << 24); // 10th-11th byte
 
-          int UTDCASHCounter = data[23] |
-          (data[24] << 8)|
-          (data[25] << 16) |
-          (data[26] << 24); // 10th-11th byte
+          int UTDCASHCounter = data[22] |
+          (data[23] << 8)|
+          (data[24] << 16) |
+          (data[25] << 24); // 10th-11th byte
 
           // Print decoded values
           print("Cash Dispense Counter: $CASHDispenseCounter");
