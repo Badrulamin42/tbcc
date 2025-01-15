@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:async';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
+import '../main.dart';
 
 bool _listEquals(Uint8List a, Uint8List b) {
   if (a.length != b.length) return false;
@@ -18,34 +20,45 @@ class Result {
 }
 
 class Communication {
-  final String portName = 'COM5'; // Replace with the actual port name android /dev/ttyS3
+
+  final String portName = Platform.isAndroid ? '/dev/ttyS3' : 'COM5';
+
   late SerialPort port;
   bool isConnected = false;
+  bool isQr = false;
   bool isSoldOut = false;
   bool isCompleteDispense = false;
   int dispenseAmount = 0;
   int UtdQr = 0;
   int UtdCash = 0;
   //init
-  Communication() {
-    port = SerialPort(portName);
+  Communication(String testPort) {
+
+    port = SerialPort(testPort);
     port.config = SerialPortConfig()
       ..baudRate = 38400
       ..stopBits = 1
       ..parity = SerialPortParity.none
       ..bits = 8;
+    Future.delayed(Duration(seconds: 3), () {
+    listenForResponse();
+    });
+
   }
 
   // Connect to the serial port (only once)
   Future<bool> connect() async {
     if (isConnected) {
-      print('Port is already connected.');
+      print('Communication.dart >> Port is already connected.');
       return true;
     }
 
     try {
       if (!port.openReadWrite()) {
-        print('Failed to open port: ${SerialPort.lastError}');
+
+        print('Error Number: ${port.name}');
+        print('Error Description: ${port.isOpen}');
+        print('Communication.dart >> Failed to open port: ${SerialPort.lastError}');
         return false;
       }
 
@@ -90,7 +103,7 @@ class Communication {
   Future<void> listenForResponse() async {
     SerialPortReader reader = SerialPortReader(port);
     Stream<Uint8List> responseStream = reader.stream;
-
+    print('Port opened successfully, Start Listening...');
     // Define the expected request and the response
 
     Uint8List pollingPCB =
@@ -261,6 +274,9 @@ class Communication {
         print('Expected response received (soldout). Sending reply...');
         isSoldOut = true;
 
+        if(isQr = false) {
+          myHomePageKey.currentState?.InsertCash('Failed');
+        }
         // Send the reply message
         port.write(resSoldOut2);
         print(
@@ -290,11 +306,17 @@ class Communication {
           print("Total Needed to Dispense: $totalNeeded");
           print("Remaining to Dispense: $RemainingtoDispense");
 
-          if(RemainingtoDispense == 0)
+          if(RemainingtoDispense == 0 && cashValue == 0)
             {
               isCompleteDispense = true;
             }
 
+          if(RemainingtoDispense > 0 && cashValue > 0){
+            myHomePageKey.currentState?.InsertCash('Dispensing');
+          }
+          if(RemainingtoDispense == 0 && cashValue > 0){
+            myHomePageKey.currentState?.InsertCash('Completed');
+          }
 
         } else {
           print("Invalid response length.");
@@ -334,6 +356,7 @@ class Communication {
       ) {
         print("Dispensed, Cash UTD here.");
 
+
         // Check if the response length is correct
         if (data.length == 28) {
 
@@ -364,6 +387,9 @@ class Communication {
           print("Cash Counter: $CASHCounter");
           print("UTD Cash Counter: $UTDCASHCounter");
 
+
+
+
           UtdCash = UTDCASHDispenseCounter;
 
         } else {
@@ -377,7 +403,7 @@ class Communication {
 
   // Main function to control the flow of communication
   Future<Result> main(String command) async {
-
+    isQr = true;
     int timing = 2000; // default for 10coin
 
     // // Connect to the port once
@@ -477,6 +503,8 @@ class Communication {
 
     if(isSoldOut) {
       isSoldOut = false;
+      isCompleteDispense = false;
+      isQr = false;
       return Result(success: false, message: '1');
     }
 
@@ -488,6 +516,7 @@ class Communication {
       if (isCompleteDispense) {
         // If isCompleteDispense becomes true, return 'Completed'
         isCompleteDispense = false; // Reset the flag for future operations
+        isQr = false;
         return Result(success: true, message: '0');
       }
 
@@ -495,7 +524,7 @@ class Communication {
       await Future.delayed(Duration(milliseconds: 5000));
       retries++;
     }
-
+    isQr = false;
     // If retries exceed maxRetries, return 'Failed'
     return Result(success: false, message: '2');
   }

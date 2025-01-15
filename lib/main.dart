@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:convert'; // For JSON encoding/decoding
-import 'package:flutter/services.dart' show Uint8List, rootBundle;
+import 'package:flutter/services.dart' show FilteringTextInputFormatter, SystemNavigator, Uint8List, rootBundle;
 import 'package:intl/intl.dart';
 import 'utils//RSA.dart'; // Import the signature utility file
 import 'package:encrypt/encrypt.dart' as encrypt;
@@ -11,11 +12,12 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'utils/mqtt_service.dart'; // Import the MQTT service class
 import 'utils/communication.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 void main() {
   runApp(MyApp());
 }
-
+final GlobalKey<_MyHomePageState> myHomePageKey = GlobalKey<_MyHomePageState>(); // Create the GlobalKey
 bool isLoading = false;
 String deviceCode = "TQR000001"; // Replace with the actual device code
 String rssi = '-39';
@@ -35,7 +37,68 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(),
+      home: LoadingPage(), // Set the initial page to the loading page
+    );
+  }
+}
+
+class LoadingPage extends StatefulWidget {
+  @override
+  _LoadingPageState createState() => _LoadingPageState();
+}
+
+class _LoadingPageState extends State<LoadingPage> {
+  double _opacity = 0.0; // For controlling the fade-in animation
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(Duration(milliseconds: 500), () {
+      setState(() {
+        _opacity = 1.0;
+      });
+    });
+    _initializeApp(); // Call initialization logic
+  }
+
+  // Simulate app initialization
+  Future<void> _initializeApp() async {
+    // Simulating a delay for tasks like API calls, authentication, etc.
+    await Future.delayed(Duration(seconds: 3));
+
+    // Navigate to the main page
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => MyHomePage()),
+    );
+  }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedOpacity(
+              opacity: _opacity, // Changes from 0.0 to 1.0
+              duration: Duration(seconds: 2), // Animation duration
+              child: Image.asset(
+                'assets/images/logo-tb.png', // Replace with your image path
+                width: 300.0, // Adjust the size of the image
+                height: 300.0,
+              ),
+            ),
+            SizedBox(height: 20),
+            Text(
+              "Powered by",
+              style: TextStyle(fontSize: 40),
+            ),
+            Text(
+              "Transpire Byte QR",
+              style: TextStyle(fontSize: 18),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -62,6 +125,39 @@ class _MyHomePageState extends State<MyHomePage> {
   String Token = '';
   String Signature = '';
   String Errormsg = '';
+  String ErrormsgConn = '';
+  String ErrormsgInitConn = '';
+  List<String> myStringArray = [];
+  String? selectedPort; // Declare it inside the method, ensuring it's not null
+  bool isConnected = false;
+
+
+  void checkConnection() async {
+    var connectivityResult = await (Connectivity().checkConnectivity());
+    print('conn : $connectivityResult');
+    if (connectivityResult.contains(ConnectivityResult.mobile) || connectivityResult.contains(ConnectivityResult.wifi)) {
+
+      setState(() {
+        isConnected = true;
+      });
+    } else {
+      setState(() {
+        isConnected = false;
+      });
+    }
+  }
+
+  int clickCount = 0; // Counter to track clicks
+
+  void handleAdminButtonClick(BuildContext context) {
+    clickCount++;
+    if (clickCount == 3) {
+      // Reset the counter
+      clickCount = 0;
+      // Show the password dialog
+      _showPasswordDialog(context);
+    }
+  }
   // Request permissions
   void requestPermissions() async {
     // Request multiple permissions
@@ -78,6 +174,8 @@ class _MyHomePageState extends State<MyHomePage> {
       print("Permissions not granted");
     }
   }
+
+
 
   String readPrivateKey(String filePath) {
     return File(filePath).readAsStringSync();
@@ -96,6 +194,40 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  void InsertCash(String status) {
+    if(status == 'Dispensing')
+      {
+
+        ReceivedPayment = true;
+        CompletedDispense = false;
+      }
+
+    if(status == 'Completed')
+      {
+        CompletedDispense = true;
+        Future.delayed(Duration(seconds: 2), ()
+        {
+          setState(() {
+
+            ReceivedPayment = false;
+            CompletedDispense = false;
+          });
+        });
+
+      }
+
+    if(status == 'Failed') {
+
+      setState(() {
+
+        ReceivedPayment = true;
+        FailedDispense = true;
+        Errormsg = 'Token is out of stock.';
+      });
+
+    }
+
+  }
   //Completing progress
   void closingStatement() async {
 
@@ -183,20 +315,158 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
     requestPermissions();
     print('initState called');
+    checkConnection();
+    final String portName = Platform.isAndroid ? '/dev/ttyS3' : 'COM5';
 
-    communication = Communication();
-    communication.connect().then((connected) {
-      if (!connected) {
-        print('Failed to connect to the port.');
-      } else {
-        print('Connected successfully');
+    // Wrap the code in a try-catch block to handle errors
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        // Ensure the Communication initialization is async and handle errors properly
+        communication = await Communication(portName);  // Ensure async initialization
+        if (communication?.port != null) {
+          print("Communication initialized with port: ${communication!.port}");
+          print("Port name: ${communication!.port.name}");  // Output port name (e.g., COM5)
+
+          // Try opening the port
+          try {
+            bool isOpened = communication!.port.openReadWrite();  // Attempt to open the port for reading and writing
+            if (isOpened) {
+              print("Port opened successfully.");
+            } else {
+              print("Failed to open port.");
+              _showErrorDialog();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text("Failed to open port: ${communication!.port.name}")),
+              );
+            }
+          } catch (e) {
+            print("Error opening port: $e");
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("Error opening port: $e")),
+            );
+          }
+        } else {
+          print("Failed to initialize communication. Port is null.");
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Failed to initialize communication")),
+          );
+        }
+      } catch (e) {
+        // Catch and handle any error during the initialization of Communication
+        print("Error during communication initialization: $e");
+        _showErrorDialog();
+
+        setState(() {
+          ErrormsgInitConn = e.toString();
+        });
       }
-    }).catchError((e) {
-      print('Error connecting: $e');
+
+    // await  communication?.connect().then((connected) {
+    //     if (!connected) {
+    //       ScaffoldMessenger.of(context).showSnackBar(
+    //         SnackBar(content: Text('Failed to connect to the port')),
+    //       );
+    //       print('Failed to connect to the port.');
+    //     } else {
+    //       print('Connected successfully');
+    //     }
+    //   }).catchError((e) {
+    //     setState(() {
+    //       ErrormsgConn = e.toString();
+    //     });
+    //     print('Error connecting: $e');
+    //   });
+
+
     });
 
 
+    final ports = SerialPort.availablePorts;
+    setState(() {
+      myStringArray.addAll(ports); // Use addAll directly
+    });
 }
+
+  void ReconnectCom(arr) async {
+    setState(() {
+      myStringArray.clear(); // Use addAll directly
+    });
+    final ports = SerialPort.availablePorts;
+    setState(() {
+      myStringArray.addAll(ports); // Use addAll directly
+    });
+    try {
+      // Ensure the Communication initialization is async and handle errors properly
+      communication = await Communication(arr);  // Ensure async initialization
+      if (communication?.port != null) {
+        print("Communication initialized with port: ${communication!.port}");
+        print("Port name: ${communication!.port.name}");  // Output port name (e.g., COM5)
+
+        // Try opening the port
+        try {
+          bool isOpened = communication!.port.openReadWrite();  // Attempt to open the port for reading and writing
+          if (isOpened) {
+            print("Port opened successfully.");
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("Port opened successfully.")),
+            );
+          } else {
+            print("Failed to open port.");
+            _showErrorDialog();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("Failed to open port: ${communication!.port.name}")),
+            );
+          }
+        } catch (e) {
+          print("Error opening port: $e");
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error opening port: $e")),
+          );
+        }
+      } else {
+        print("Failed to initialize communication. Port is null.");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to initialize communication")),
+        );
+      }
+    } catch (e) {
+      _showErrorDialog();
+      setState(() {
+        ErrormsgInitConn = e.toString();
+      });
+      // Catch and handle any error during the initialization of Communication
+      print("Error during communication initialization: $e");
+
+    }
+   // await communication?.connect().then((connected) {
+   //    if (!connected) {
+   //
+   //      ScaffoldMessenger.of(context).showSnackBar(
+   //        SnackBar(content: Text('connect() >> Failed to connect to the port')),
+   //      );
+   //      print('connect() >> Failed to connect to the port.');
+   //      _showErrorDialog();
+   //    } else {
+   //      print('Connected successfully');
+   //    }
+   //  }).catchError((e) {
+   //   setState(() {
+   //     ErrormsgConn = e.toString();
+   //   });
+
+      // print('Error connecting: $e');
+    // });
+  }
+
+// Method to show the error dialog
+  void _showErrorDialog() {
+    if (context.mounted) {  // Check if the context is still valid
+      _reConnectDialog(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to initialize communication")),
+      );
+    }
+  }
 
   @override
   void mqttConn() {
@@ -270,7 +540,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
 
   String status = 'Initializing...';
-  late Communication communication;
+  Communication? communication;
 
   // Connect to the port once
 
@@ -280,16 +550,16 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<bool> sendData(String command) async {
 
 
-    Result result = await communication.main(command);
+    Result? result = await communication?.main(command);
 
-    if(result.success == true) {
+    if(result?.success == true) {
 
       return true;
     }
     else{
       setState(() {
-        if(result.message == '1'){
-          Errormsg = 'Token out of Stock';
+        if(result?.message == '1'){
+          Errormsg = 'Token is out of Stock';
         }
         else{
           Errormsg =  'Timeout';
@@ -583,6 +853,105 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  void _showPasswordDialog(BuildContext context) {
+    final TextEditingController passwordController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Enter Password'),
+          content: TextField(
+            controller: passwordController,
+            obscureText: true,
+            keyboardType: TextInputType.number, // Ensures only number keyboard appears
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly, // Limits input to digits only
+            ],
+            decoration: InputDecoration(hintText: "Password"),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                if (passwordController.text == "168168") {
+                  // Password is correct, close the dialog and exit app
+                  Navigator.pop(context);
+                  SystemNavigator.pop(); // Exit app
+                } else {
+                  // Incorrect password, show an error
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Incorrect password')),
+                  );
+                  Navigator.pop(context); // Close the dialog
+                }
+              },
+              child: Text('Submit'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _reConnectDialog(BuildContext context) {
+
+
+    showDialog(
+      context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Text('Could not connect default port, Please choose an available port'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min, // Ensures the dialog content fits the text and dropdown
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Add the extra text with a breakline
+                Text(
+                  "Initialize Error :  $ErrormsgInitConn\n\n Connection Error :  $ErrormsgConn", // Line break added here
+                  style: TextStyle(fontSize: 16),
+                ),
+                // DropdownButtonFormField with the selected port
+                DropdownButtonFormField<String>(
+                  value: selectedPort,  // Ensure selectedPort is reflected here
+                  hint: Text("Select a port"),
+                  onChanged: (String? newPort) {
+                    setState(() {
+                      selectedPort = newPort; // Update the selected port
+                      print("Selected Port: $selectedPort");  // Debugging
+                    });
+                  },
+                  items: myStringArray.map((String port) {
+                    return DropdownMenuItem<String>(
+                      value: port,
+                      child: Text(port),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  if (selectedPort != null && selectedPort != "No available ports") {
+                    // Use the selected port for reconnection
+                    ReconnectCom(selectedPort!);
+                    Navigator.pop(context); // Close the dialog
+                  } else {
+                    // If no valid port is selected, show a message
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Please select a valid port")),
+                    );
+                  }
+                },
+                child: Text('Connect'),
+              ),
+            ],
+          );
+        }
+
+    );
+  }
+
+
   // Function to show modal popup
   void showPopup(BuildContext context) {
     int countdown = 60; // Initial countdown value
@@ -604,6 +973,11 @@ class _MyHomePageState extends State<MyHomePage> {
         }
       });
     }
+
+
+
+    // Show password dialog before exiting
+
 
     showDialog(
       context: context,
@@ -691,7 +1065,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
 
                     Positioned(
-                      top: 185, // Position it from the top
+                      top: 190, // Position it from the top
                       left: 0,
                       right: 0,
                       child: Padding(
@@ -766,8 +1140,8 @@ class _MyHomePageState extends State<MyHomePage> {
                                 )
                                     : Image.asset(
                                   'assets/images/errorpage.png', // Replace with your image path
-                                  height: screenHeight * 0.3, // Adjust dynamically based on screen height
-                                  width: screenWidth * 0.3, // Center the image and set the width
+                                  height: 325, // Adjust dynamically based on screen height
+                                  width: 300, // Center the image and set the width
                                 ),
                               ),
 
@@ -847,6 +1221,7 @@ class _MyHomePageState extends State<MyHomePage> {
     return Scaffold(
       body: Stack(
         children: [
+
           // Background Image covering 45% of the screen height
           Positioned(
             top: 0,
@@ -914,8 +1289,12 @@ class _MyHomePageState extends State<MyHomePage> {
                   const SizedBox(
                       height:
                           30), // Add space between description and content below
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  Center(
+                    child:
+                  Wrap(
+                    alignment: WrapAlignment.start, // Aligns buttons to the center
+                    spacing: 20.0, // Adjusts the space between buttons
+                    runSpacing: 20.0, // Adjusts the vertical space between rows of buttons
                     children: [
                       ElevatedButton(
                         onPressed: () {
@@ -934,8 +1313,8 @@ class _MyHomePageState extends State<MyHomePage> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          minimumSize: Size(200,
-                              150), // Set both width and height to make it square
+                          minimumSize: Size(275,
+                              200), // Set both width and height to make it square
                           backgroundColor: Colors
                               .blue.shade50, // Change background color here
                           shape: RoundedRectangleBorder(
@@ -988,7 +1367,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          minimumSize: Size(200, 150),
+                          minimumSize: Size(275, 200), //
                           backgroundColor: Colors.blue.shade50,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -1036,7 +1415,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          minimumSize: Size(200, 150),
+                          minimumSize: Size(275, 200), //
                           backgroundColor: Colors.blue.shade50,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -1085,7 +1464,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          minimumSize: Size(200, 150),
+                          minimumSize: Size(275, 200), //
                           backgroundColor: Colors.blue.shade50,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -1176,8 +1555,9 @@ class _MyHomePageState extends State<MyHomePage> {
                       //     textAlign: TextAlign.center,
                       //   ),
                       // ), //test
+
                     ],
-                  ),
+                  ),),
                   const SizedBox(height: 100),
                   Align(
                     alignment: Alignment.topLeft,
@@ -1217,9 +1597,86 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                 ],
               ),
+
             ),
           ),
-          // Loading overlay
+
+          Positioned(
+            bottom: 20.0, // Adjust the position as needed
+            left: 0,
+            right: 0,
+            child: Center( // This will center the child within the Positioned widget
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/images/logo-tb.png', // Replace with your image path
+                    width: 50.0, // Adjust the size of the image
+                    height: 50.0,
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    "Powered by",
+                    style: TextStyle(fontSize: 24),
+                  ),
+                  Text(
+                    "Transpire Byte QR",
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+
+          Stack(
+              children: [
+                Positioned(
+                  top: 20.0, // Adjust the position as needed
+                  left: 100.0,
+                  child: Opacity(
+                    opacity: 0.0, // Fully transparent but still interactive
+                    child: ElevatedButton(
+                      onPressed: () {
+                        handleAdminButtonClick(context);
+                      },
+                      child: Text("Admin"),
+                    ),
+                  ),
+                ),
+                // Circle Icon for Internet Connection Status
+                Positioned(
+                  top: 20.0, // Adjust the vertical position as needed
+                  left: 20.0, // Adjust the horizontal position
+                  child: Row(
+                    children: [
+                      Container(
+
+                        width: 20.0, // Circle width
+                        height: 30.0, // Circle height
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: (isConnected ? Colors.green : Colors.red).withOpacity(0.6), // Add opacity
+                        ),
+                      ),
+                      SizedBox(width: 8.0), // Add some spacing between the circle and the text
+                      Text(
+                        isConnected ? 'Online' : 'Offline',
+                        style: TextStyle(
+                          fontSize: 16.0, // Adjust font size for the text
+                          fontWeight: FontWeight.bold, // Bold text
+                          color: Colors.black.withOpacity(0.6), // Text color
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              ],
+
+
+          ),
+              // Loading overlay
           if (ReceivedPayment)
             Container(
               color: Colors.black.withOpacity(0.5), // Semi-transparent background
