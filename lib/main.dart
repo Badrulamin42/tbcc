@@ -3,8 +3,9 @@ import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:convert'; // For JSON encoding/decoding
-import 'package:flutter/services.dart' show FilteringTextInputFormatter, SystemNavigator, Uint8List, rootBundle;
+import 'package:flutter/services.dart' show FilteringTextInputFormatter, MethodChannel, PlatformException, SystemNavigator, Uint8List, rootBundle;
 import 'package:intl/intl.dart';
+
 import 'utils//RSA.dart'; // Import the signature utility file
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'dart:io';
@@ -14,8 +15,11 @@ import 'utils/communication.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
+const String appTag = "com.example.tbcc";
+
 void main() {
   runApp(MyApp());
+
 }
 final GlobalKey<_MyHomePageState> myHomePageKey = GlobalKey<_MyHomePageState>(); // Create the GlobalKey
 bool isLoading = false;
@@ -24,16 +28,27 @@ String rssi = '-39';
 //set encryption obj
 const secretKey = r'24D7EB69ACD0!@#$'; // Must be 32 characters
 const ivString = '0192006944061854'; // Must be 16 characters
+String port = '';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  static const platform = MethodChannel('com.example.app/boot');
+
+  // Initialize BootReceiver via MethodChannel
+  static Future<void> initializeBootReceiver() async {
+    try {
+      await platform.invokeMethod('initializeBootReceiver');
+    } on PlatformException catch (e) {
+      print("Failed to initialize BootReceiver: '${e.message}'.");
+    }
+  }
 
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Transpire Byte Qr',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
@@ -47,6 +62,7 @@ class LoadingPage extends StatefulWidget {
   _LoadingPageState createState() => _LoadingPageState();
 }
 
+
 class _LoadingPageState extends State<LoadingPage> {
   double _opacity = 0.0; // For controlling the fade-in animation
   @override
@@ -58,7 +74,10 @@ class _LoadingPageState extends State<LoadingPage> {
       });
     });
     _initializeApp(); // Call initialization logic
+    MyApp.initializeBootReceiver();
   }
+
+
 
   // Simulate app initialization
   Future<void> _initializeApp() async {
@@ -104,12 +123,10 @@ class _LoadingPageState extends State<LoadingPage> {
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key});
+  MyHomePage({Key? key}) : super(key: myHomePageKey); // Pass the GlobalKey here
 
   @override
   _MyHomePageState createState() => _MyHomePageState();
-
-
 }
 
 
@@ -130,6 +147,7 @@ class _MyHomePageState extends State<MyHomePage> {
   List<String> myStringArray = [];
   String? selectedPort; // Declare it inside the method, ensuring it's not null
   bool isConnected = false;
+  String UTDQR = "0";
 
 
   void checkConnection() async {
@@ -159,21 +177,6 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
   // Request permissions
-  void requestPermissions() async {
-    // Request multiple permissions
-    await Permission.camera.request();
-    await Permission.location.request();
-    await Permission.bluetooth.request();
-
-    // Check if permissions are granted and handle accordingly
-    if (await Permission.camera.isGranted &&
-        await Permission.location.isGranted &&
-        await Permission.bluetooth.isGranted) {
-      print("All permissions granted");
-    } else {
-      print("Permissions not granted");
-    }
-  }
 
 
 
@@ -195,17 +198,22 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void InsertCash(String status) {
+    print('insertcash being called');
     if(status == 'Dispensing')
-      {
-
-        ReceivedPayment = true;
-        CompletedDispense = false;
-      }
+    {
+      setState(() {
+      ReceivedPayment = true;
+      CompletedDispense = false;
+      });
+    }
 
     if(status == 'Completed')
       {
-        CompletedDispense = true;
-        Future.delayed(Duration(seconds: 2), ()
+        setState(() {
+          CompletedDispense = true;
+          FailedDispense == false;
+        });
+        Future.delayed(Duration(seconds: 5), ()
         {
           setState(() {
 
@@ -252,6 +260,80 @@ class _MyHomePageState extends State<MyHomePage> {
       return;
     }
 
+    //submit trx payload
+
+    final PaymentPayloadtrx = {
+      "commandcode": "DI_SetTransactionEWalletV2",
+      "devicecode": deviceCode,
+      "data": [
+        {
+          "statusstarttime": getFormattedDateTime(),
+          "status": "Payment",
+          "eutdcounter": UTDQR,
+          "eamount": selectedAmount,
+          "qrcode": "",
+          "ewallettransactionid": refId,
+          "ewallettypecode": "DUITNOW",
+          "numberofinquiry": "0",
+          "duration": "0/175",
+          "errorcode": "0",
+          "errormessage": "",
+          "ewallettestusercode": "",
+          "slot": "55",
+          "responsetime": "1",
+          "rssi": "114"
+        }
+      ]
+    };
+    final privateKeyPem = await loadPrivateKey();
+    String signature =
+    await generateSignature(jsonEncode(PaymentPayloadtrx), privateKeyPem);
+    // try {
+    //   final responsePaymentTRXEW = await http.post(
+    //     Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+    //     headers: {
+    //       'Content-Type': 'application/json',
+    //       'Token': Token,
+    //       'Signature': signature
+    //     },
+    //     body: json.encode(PaymentPayloadtrx),
+    //   );
+    //
+    //   if (responsePaymentTRXEW.statusCode == 200) {
+    //     print('Transaction:Payment sent successfully');
+    //   } else {
+    //     print('Failed to send payment transaction. Status code: ${responsePaymentTRXEW.statusCode}');
+    //
+    //   }
+    // } catch (err) {
+    //   print('Error during fetch payment trx: $err');
+    // }
+
+    //success trx
+
+    final SuccessPaymentPayloadtrx = {
+      "commandcode": "DI_SetTransactionEWalletV2",
+      "devicecode": deviceCode,
+      "data": [
+        {
+          "statusstarttime": getFormattedDateTime(),
+          "status": "Success",
+          "eutdcounter": UTDQR,
+          "eamount": selectedAmount,
+          "qrcode": "",
+          "ewallettransactionid": refId,
+          "ewallettypecode": "DUITNOW",
+          "numberofinquiry": "0",
+          "duration": "0/175",
+          "errorcode": "0",
+          "errormessage": "",
+          "ewallettestusercode": "",
+          "slot": "55",
+          "responsetime": "1",
+          "rssi": "114"
+        }
+      ]
+    };
     setState(() {
       ClosingCall = true;
     });
@@ -269,7 +351,28 @@ class _MyHomePageState extends State<MyHomePage> {
        });
 
        //fetch success api
-
+       // String signature =
+       // await generateSignature(jsonEncode(SuccessPaymentPayloadtrx), privateKeyPem);
+       // try {
+       //   final responseSuccessTRXEW = await http.post(
+       //     Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+       //     headers: {
+       //       'Content-Type': 'application/json',
+       //       'Token': Token,
+       //       'Signature': signature
+       //     },
+       //     body: json.encode(PaymentPayloadtrx),
+       //   );
+       //
+       //   if (responseSuccessTRXEW.statusCode == 200) {
+       //     print('Transaction:Success sent successfully');
+       //   } else {
+       //     print('Failed to success transaction. Status code: ${responseSuccessTRXEW.statusCode}');
+       //
+       //   }
+       // } catch (err) {
+       //   print('Error during fetch success trx: $err');
+       // }
      }
 
    //failed dispense
@@ -313,17 +416,24 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    requestPermissions();
+
     print('initState called');
     checkConnection();
-    final String portName = Platform.isAndroid ? '/dev/ttyS3' : 'COM5';
-
+    final String portName = '/dev/ttyS3'; // 'COM5';
+     // const platform = MethodChannel('com.example.serialport');
     // Wrap the code in a try-catch block to handle errors
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // final bool hasPermission = await platform.invokeMethod('checkPermission');
+      // if (hasPermission) {
+      //   print('Permission granted');
+      // } else {
+      //   print('Permission denied');
+      // }
       try {
         // Ensure the Communication initialization is async and handle errors properly
+
         communication = await Communication(portName);  // Ensure async initialization
-        if (communication?.port != null) {
+        // if (communication.port) {
           print("Communication initialized with port: ${communication!.port}");
           print("Port name: ${communication!.port.name}");  // Output port name (e.g., COM5)
 
@@ -331,6 +441,9 @@ class _MyHomePageState extends State<MyHomePage> {
           try {
             bool isOpened = communication!.port.openReadWrite();  // Attempt to open the port for reading and writing
             if (isOpened) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text("Port opened successfully")),
+              );
               print("Port opened successfully.");
             } else {
               print("Failed to open port.");
@@ -345,12 +458,12 @@ class _MyHomePageState extends State<MyHomePage> {
               SnackBar(content: Text("Error opening port: $e")),
             );
           }
-        } else {
-          print("Failed to initialize communication. Port is null.");
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Failed to initialize communication")),
-          );
-        }
+        // } else {
+        //   print("Failed to initialize communication. Port is null.");
+        //   ScaffoldMessenger.of(context).showSnackBar(
+        //     SnackBar(content: Text("Failed to initialize communication")),
+        //   );
+        // }
       } catch (e) {
         // Catch and handle any error during the initialization of Communication
         print("Error during communication initialization: $e");
@@ -385,6 +498,8 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       myStringArray.addAll(ports); // Use addAll directly
     });
+
+    print('ports: $ports' );
 }
 
   void ReconnectCom(arr) async {
@@ -553,6 +668,10 @@ class _MyHomePageState extends State<MyHomePage> {
     Result? result = await communication?.main(command);
 
     if(result?.success == true) {
+
+      setState(() {
+        UTDQR = result!.utdQr.toString();
+      });
 
       return true;
     }

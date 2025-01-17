@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'dart:async';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
+
 import '../main.dart';
 
 bool _listEquals(Uint8List a, Uint8List b) {
@@ -16,7 +17,8 @@ bool _listEquals(Uint8List a, Uint8List b) {
 class Result {
   final bool success;
   final String message;
-  Result({required this.success, required this.message});
+  final int utdQr;
+  Result({required this.success, required this.message, required this.utdQr});
 }
 
 class Communication {
@@ -31,6 +33,8 @@ class Communication {
   int dispenseAmount = 0;
   int UtdQr = 0;
   int UtdCash = 0;
+  bool isDispenseCash = false;
+
   //init
   Communication(String testPort) {
 
@@ -40,6 +44,8 @@ class Communication {
       ..stopBits = 1
       ..parity = SerialPortParity.none
       ..bits = 8;
+
+
     Future.delayed(Duration(seconds: 3), () {
     listenForResponse();
     });
@@ -313,10 +319,10 @@ class Communication {
 
           if(RemainingtoDispense > 0 && cashValue > 0){
             myHomePageKey.currentState?.InsertCash('Dispensing');
+            isDispenseCash = true;
+            print('cash dispensing true');
           }
-          if(RemainingtoDispense == 0 && cashValue > 0){
-            myHomePageKey.currentState?.InsertCash('Completed');
-          }
+
 
         } else {
           print("Invalid response length.");
@@ -388,6 +394,11 @@ class Communication {
           print("UTD Cash Counter: $UTDCASHCounter");
 
 
+            myHomePageKey.currentState?.InsertCash('Completed');
+            isDispenseCash = false;
+            print('cash dispense complete true');
+
+
 
 
           UtdCash = UTDCASHDispenseCounter;
@@ -400,6 +411,8 @@ class Communication {
 
     });
   }
+
+
 
   // Main function to control the flow of communication
   Future<Result> main(String command) async {
@@ -505,7 +518,7 @@ class Communication {
       isSoldOut = false;
       isCompleteDispense = false;
       isQr = false;
-      return Result(success: false, message: '1');
+      return Result(success: false, message: '1', utdQr: 0);
     }
 
     const int maxRetries = 3; // Maximum retries
@@ -517,7 +530,7 @@ class Communication {
         // If isCompleteDispense becomes true, return 'Completed'
         isCompleteDispense = false; // Reset the flag for future operations
         isQr = false;
-        return Result(success: true, message: '0');
+        return Result(success: true, message: '0', utdQr: UtdQr);
       }
 
       // Wait for the specified interval before retrying
@@ -526,7 +539,7 @@ class Communication {
     }
     isQr = false;
     // If retries exceed maxRetries, return 'Failed'
-    return Result(success: false, message: '2');
+    return Result(success: false, message: '2', utdQr : 0);
   }
 
   //help & reply generator
