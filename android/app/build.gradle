@@ -58,3 +58,8 @@ subprojects {
 flutter {
     source = "../.."
 }
+
+dependencies {
+ implementation 'com.github.felHR85:UsbSerial:6.0.6'
+
+}

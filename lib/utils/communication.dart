@@ -3,7 +3,8 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'dart:async';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
-
+import 'package:flutter_usb/flutter_usb.dart';
+import 'package:usb_serial/usb_serial.dart';
 import '../main.dart';
 
 bool _listEquals(Uint8List a, Uint8List b) {
@@ -22,7 +23,8 @@ class Result {
 }
 
 class Communication {
-
+  UsbDevice? _device;
+  UsbPort? _port;
   final String portName = Platform.isAndroid ? '/dev/ttyS3' : 'COM5';
 
   late SerialPort port;
@@ -38,56 +40,70 @@ class Communication {
   //init
   Communication(String testPort) {
 
-    port = SerialPort(testPort);
-    port.config = SerialPortConfig()
-      ..baudRate = 38400
-      ..stopBits = 1
-      ..parity = SerialPortParity.none
-      ..bits = 8;
-
-
+    findAndOpenDevice(testPort);
     Future.delayed(Duration(seconds: 3), () {
-    listenForResponse();
+      setupCommunication();
     });
 
+    Future.delayed(Duration(seconds: 5), () {
+     listenForResponse();
+    });
+
+
+
+  }
+  Future<void> setupCommunication() async {
+    if (_port != null) {
+      await _port!.setPortParameters(
+        38400, // Set the baud rate (e.g., 115200)
+       UsbPort.DATABITS_8,
+        UsbPort.STOPBITS_1,
+         UsbPort.PARITY_NONE,
+      );
+      print('Serial communication configured!');
+    }
   }
 
-  // Connect to the serial port (only once)
-  Future<bool> connect() async {
-    if (isConnected) {
-      print('Communication.dart >> Port is already connected.');
-      return true;
-    }
+  Future<bool> findAndOpenDevice(init) async {
+    // List all devices connected via USB
+    List<UsbDevice> devices = await UsbSerial.listDevices();
+    print('Devices : $devices');
+    // Find the device by its Vendor ID and Product ID
+    _device = devices.firstWhere(
+          (device) => device.deviceName == (init == '' ? '/dev/bus/usb/002/004' : init ),
+      // device.vid == 0x1A86 && device.pid == 0x7523, // Vendor ID: 1a86, Product ID: 7523
+      orElse: () => throw Exception("USB Serial device not found!"),
+    );
 
-    try {
-      if (!port.openReadWrite()) {
+    // Open the device
+    await openDevice(_device!);
+    return true;
+  }
 
-        print('Error Number: ${port.name}');
-        print('Error Description: ${port.isOpen}');
-        print('Communication.dart >> Failed to open port: ${SerialPort.lastError}');
+  // Open the USB serial device
+  Future<bool> openDevice(UsbDevice device) async {
+    _port = await device.create();
+    if (_port != null) {
+      bool opened = await _port!.open();
+      if (opened) {
+
+        print('Device opened successfully!');
+        return true;
+      } else {
+        print('Failed to open the device.');
         return false;
       }
-
-      isConnected = true;
-      listenForResponse();
-      print('Port opened successfully, Start Listening...');
-      return true;
-    } catch (e) {
-      print('Error opening port: $e');
+    }
+    else{
+      print('Device not found');
       return false;
     }
   }
 
-  // Disconnect from the serial port (optional)
-  void disconnect() {
-    if (isConnected) {
-      port.close();
-      isConnected = false;
-      print('Port closed.');
-    } else {
-      print('Port is already closed.');
-    }
-  }
+  // Connect to the serial port (only once)
+
+
+
 
   // Send data to the serial port
   Future<void> sendData(Uint8List data) async {
@@ -97,7 +113,7 @@ class Communication {
     // }
 
     try {
-      port.write(data);
+      _port!.write(data);
       print(
           'Data sent: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
     } catch (e) {
@@ -107,9 +123,9 @@ class Communication {
 
   // Read the response from the port
   Future<void> listenForResponse() async {
-    SerialPortReader reader = SerialPortReader(port);
-    Stream<Uint8List> responseStream = reader.stream;
-    print('Port opened successfully, Start Listening...');
+    // SerialPortReader reader = SerialPortReader(port);
+    // Stream<Uint8List> responseStream = reader.stream;
+    print('Start Listening...');
     // Define the expected request and the response
 
     Uint8List pollingPCB =
@@ -234,11 +250,11 @@ class Communication {
       0xAA, 0x03, 0x01, 0x14, 0x16, 0xDD
     ]);
 
+ 
 
-
-    responseStream.listen((Uint8List data) {
-      print(
-          'Received data: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+    _port!.inputStream?.listen((Uint8List data) {
+      print('Raw data: $data'); // Prints the raw data bytes
+      print('Hex data: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}'); // Print hex data
 
       // Compare received data to the expected response
 
@@ -248,7 +264,7 @@ class Communication {
         print('Expected response received (polling). Sending reply...');
 
         // Send the reply message
-        port.write(pcToPollingPCB);
+        _port!.write(pcToPollingPCB);
         print(
             'Reply sent: ${pcToPollingPCB.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       }
@@ -259,7 +275,7 @@ class Communication {
         print('Expected response received (status 1 or 2). Sending reply...');
 
         // Send the reply message
-        port.write(statusResponse);
+        _port!.write(statusResponse);
         print(
             'Reply sent: ${statusResponse.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       }
@@ -270,7 +286,7 @@ class Communication {
 
         final discom = createDispenseCommand();
         // Send the reply message
-        port.write(discom);
+        _port!.write(discom);
         print(
             'Reply sent: ${discom.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       }
@@ -284,7 +300,7 @@ class Communication {
           myHomePageKey.currentState?.InsertCash('Failed');
         }
         // Send the reply message
-        port.write(resSoldOut2);
+        _port!.write(resSoldOut2);
         print(
             'Reply sent: ${resSoldOut2.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       }

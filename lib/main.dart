@@ -5,6 +5,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert'; // For JSON encoding/decoding
 import 'package:flutter/services.dart' show FilteringTextInputFormatter, MethodChannel, PlatformException, SystemNavigator, Uint8List, rootBundle;
 import 'package:intl/intl.dart';
+import 'package:usb_serial/usb_serial.dart';
+
+
 
 import 'utils//RSA.dart'; // Import the signature utility file
 import 'package:encrypt/encrypt.dart' as encrypt;
@@ -14,7 +17,7 @@ import 'utils/mqtt_service.dart'; // Import the MQTT service class
 import 'utils/communication.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-
+import 'package:flutter_usb/flutter_usb.dart';
 const String appTag = "com.example.tbcc";
 
 void main() {
@@ -139,6 +142,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool CompletedDispense = false;
   bool FailedDispense = false;
   bool ClosingCall = false;
+  bool isMachineFaulty = false;
   String Token = '';
   String Signature = '';
   String Errormsg = '';
@@ -416,134 +420,76 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
+    List<UsbDevice> devices = [];
+    UsbDevice? _device;
+    UsbPort? _port;
 
     print('initState called');
     checkConnection();
-    final String portName = '/dev/ttyS3'; // 'COM5';
+    final String portName = '/dev/usb/tty2-1.4'; // 'COM5';
      // const platform = MethodChannel('com.example.serialport');
     // Wrap the code in a try-catch block to handle errors
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // final bool hasPermission = await platform.invokeMethod('checkPermission');
-      // if (hasPermission) {
-      //   print('Permission granted');
-      // } else {
-      //   print('Permission denied');
-      // }
-      try {
-        // Ensure the Communication initialization is async and handle errors properly
 
-        communication = await Communication(portName);  // Ensure async initialization
-        // if (communication.port) {
-          print("Communication initialized with port: ${communication!.port}");
-          print("Port name: ${communication!.port.name}");  // Output port name (e.g., COM5)
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+
+
 
           // Try opening the port
           try {
-            bool isOpened = communication!.port.openReadWrite();  // Attempt to open the port for reading and writing
-            if (isOpened) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("Port opened successfully")),
-              );
-              print("Port opened successfully.");
-            } else {
-              print("Failed to open port.");
-              _showErrorDialog();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("Failed to open port: ${communication!.port.name}")),
-              );
-            }
+
+            communication = await Communication('');  // Ensure async initialization
+
+            print("Communication initialized with port: ${communication!.port}");
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("Usb Port Connected")),
+            );
+
           } catch (e) {
             print("Error opening port: $e");
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text("Error opening port: $e")),
             );
+
+              _showErrorDialog();
+
+              setState(() {
+                ErrormsgInitConn = e.toString();
+              });
           }
-        // } else {
-        //   print("Failed to initialize communication. Port is null.");
-        //   ScaffoldMessenger.of(context).showSnackBar(
-        //     SnackBar(content: Text("Failed to initialize communication")),
-        //   );
-        // }
-      } catch (e) {
-        // Catch and handle any error during the initialization of Communication
-        print("Error during communication initialization: $e");
-        _showErrorDialog();
 
-        setState(() {
-          ErrormsgInitConn = e.toString();
-        });
-      }
 
-    // await  communication?.connect().then((connected) {
-    //     if (!connected) {
-    //       ScaffoldMessenger.of(context).showSnackBar(
-    //         SnackBar(content: Text('Failed to connect to the port')),
-    //       );
-    //       print('Failed to connect to the port.');
-    //     } else {
-    //       print('Connected successfully');
-    //     }
-    //   }).catchError((e) {
-    //     setState(() {
-    //       ErrormsgConn = e.toString();
-    //     });
-    //     print('Error connecting: $e');
-    //   });
 
+          devices = await UsbSerial.listDevices();
+          setState(() {
+            myStringArray.addAll(devices.map((device) => device.deviceName)); // Use addAll directly
+          });
 
     });
 
 
-    final ports = SerialPort.availablePorts;
-    setState(() {
-      myStringArray.addAll(ports); // Use addAll directly
-    });
+    // final ports = SerialPort.availablePorts;
+    // setState(() {
+    //   myStringArray.addAll(ports); // Use addAll directly
+    // });
 
-    print('ports: $ports' );
+    // print('ports: $ports' );
 }
 
   void ReconnectCom(arr) async {
+    List<UsbDevice> devices = [];
+    UsbDevice? _device;
     setState(() {
       myStringArray.clear(); // Use addAll directly
     });
-    final ports = SerialPort.availablePorts;
+    devices = await UsbSerial.listDevices();
+
     setState(() {
-      myStringArray.addAll(ports); // Use addAll directly
+      myStringArray.addAll(devices.map((device) => device.deviceName)); // Use addAll directly
     });
     try {
       // Ensure the Communication initialization is async and handle errors properly
       communication = await Communication(arr);  // Ensure async initialization
-      if (communication?.port != null) {
-        print("Communication initialized with port: ${communication!.port}");
-        print("Port name: ${communication!.port.name}");  // Output port name (e.g., COM5)
 
-        // Try opening the port
-        try {
-          bool isOpened = communication!.port.openReadWrite();  // Attempt to open the port for reading and writing
-          if (isOpened) {
-            print("Port opened successfully.");
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("Port opened successfully.")),
-            );
-          } else {
-            print("Failed to open port.");
-            _showErrorDialog();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("Failed to open port: ${communication!.port.name}")),
-            );
-          }
-        } catch (e) {
-          print("Error opening port: $e");
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error opening port: $e")),
-          );
-        }
-      } else {
-        print("Failed to initialize communication. Port is null.");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to initialize communication")),
-        );
-      }
     } catch (e) {
       _showErrorDialog();
       setState(() {
@@ -553,24 +499,7 @@ class _MyHomePageState extends State<MyHomePage> {
       print("Error during communication initialization: $e");
 
     }
-   // await communication?.connect().then((connected) {
-   //    if (!connected) {
-   //
-   //      ScaffoldMessenger.of(context).showSnackBar(
-   //        SnackBar(content: Text('connect() >> Failed to connect to the port')),
-   //      );
-   //      print('connect() >> Failed to connect to the port.');
-   //      _showErrorDialog();
-   //    } else {
-   //      print('Connected successfully');
-   //    }
-   //  }).catchError((e) {
-   //   setState(() {
-   //     ErrormsgConn = e.toString();
-   //   });
 
-      // print('Error connecting: $e');
-    // });
   }
 
 // Method to show the error dialog
@@ -679,6 +608,7 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
         if(result?.message == '1'){
           Errormsg = 'Token is out of Stock';
+          // isMachineFaulty = true;
         }
         else{
           Errormsg =  'Timeout';
@@ -823,7 +753,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }) async {
     String referenceId = generateReferenceId();
     String apiUrl = 'https://tqrdnqr-api.transpire.com.my/API/Exchange';
-
+    print('qr started');
     try {
       setLoading(true);
 
@@ -846,14 +776,14 @@ class _MyHomePageState extends State<MyHomePage> {
         body: json.encode(payloadtoken),
       );
       // Make the POST request
-
+      print('request token');
       // Handle the response
       if (responsetoken.statusCode == 200) {
         final responseData = json.decode(responsetoken.body);
         Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
         String token = parsedJson['data'][0]['token'];
 
-
+        print('request token success');
         setState(() {
           Token = token; // Save the generated QR code URL
         });
@@ -876,7 +806,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
         String signature =
             await generateSignature(jsonEncode(payload), privateKeyPem);
-
+        print('request qr');
         final response = await http.post(
           Uri.parse(apiUrl),
           headers: {
@@ -888,6 +818,7 @@ class _MyHomePageState extends State<MyHomePage> {
         );
         //
         final QrResponseData = json.decode(response.body);
+        print('get the data QR : $QrResponseData');
         Map<String, dynamic> qrparsedJson = jsonDecode(response.body);
         String qrcode = qrparsedJson['data'][0]['qrcode'] ?? null;
         String refid = qrparsedJson['data'][0]['referenceid'] ?? null;
