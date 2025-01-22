@@ -6,7 +6,7 @@ import 'dart:convert'; // For JSON encoding/decoding
 import 'package:flutter/services.dart' show FilteringTextInputFormatter, MethodChannel, PlatformException, SystemNavigator, Uint8List, rootBundle;
 import 'package:intl/intl.dart';
 import 'package:usb_serial/usb_serial.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 
 
 import 'utils//RSA.dart'; // Import the signature utility file
@@ -51,7 +51,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Transpire Byte Qr',
+      title: 'Transpire Bytes Qr',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
@@ -105,19 +105,11 @@ class _LoadingPageState extends State<LoadingPage> {
               duration: Duration(seconds: 2), // Animation duration
               child: Image.asset(
                 'assets/images/logo-tb.png', // Replace with your image path
-                width: 300.0, // Adjust the size of the image
-                height: 300.0,
+                width: 600.0, // Adjust the size of the image
+                height: 200.0,
               ),
             ),
-            SizedBox(height: 20),
-            Text(
-              "Powered by",
-              style: TextStyle(fontSize: 40),
-            ),
-            Text(
-              "Transpire Byte QR",
-              style: TextStyle(fontSize: 18),
-            ),
+
           ],
         ),
       ),
@@ -135,9 +127,11 @@ class MyHomePage extends StatefulWidget {
 
 
 class _MyHomePageState extends State<MyHomePage> {
+  late TextEditingController _controller; // Text editing controller
   String selectedAmount = ''; // Store the selected amount as state
   String? qrCodeImageUrl;
   String? refId = '';
+  String? random = '';
   bool ReceivedPayment = false;
   bool CompletedDispense = false;
   bool FailedDispense = false;
@@ -151,9 +145,27 @@ class _MyHomePageState extends State<MyHomePage> {
   List<String> myStringArray = [];
   String? selectedPort; // Declare it inside the method, ensuring it's not null
   bool isConnected = false;
-  String UTDQR = "0";
+  String UTDQR = '0';
+  String qrCompanyname = '';
+  String _savedText = ''; // Variable to store the saved text
 
+  Future<void> _loadSavedText() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? savedText = prefs.getString('savedText') ?? '';
+    setState(() {
+      _savedText = savedText;
+      _controller = TextEditingController(text: _savedText); // Set default text
+    });
+  }
 
+  // Save text to shared preferences
+  Future<void> _saveText(String text) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString('savedText', text);
+    setState(() {
+      _savedText = text;
+    });
+  }
   void checkConnection() async {
     var connectivityResult = await (Connectivity().checkConnectivity());
     print('conn : $connectivityResult');
@@ -200,8 +212,36 @@ class _MyHomePageState extends State<MyHomePage> {
       throw Exception("Error loading private key: $e");
     }
   }
+   String extractCompanyName(String qrData) {
+    Map<String, String> parsedData = parseTLV(qrData);
 
-  void InsertCash(String status) {
+    String companyName = parsedData['59'] ?? 'Unknown'; // Tag 59 contains the company name
+    return companyName;
+  }
+
+   Map<String, String> parseTLV(String data) {
+    Map<String, String> result = {};
+    int i = 0;
+
+    while (i < data.length) {
+      // Extract Tag (2 digits)
+      String tag = data.substring(i, i + 2);
+      i += 2;
+
+      // Extract Length (2 digits)
+      int length = int.parse(data.substring(i, i + 2));
+      i += 2;
+
+      // Extract Value (length of 'length')
+      String value = data.substring(i, i + length);
+      i += length;
+
+      result[tag] = value;
+    }
+
+    return result;
+  }
+  void InsertCash(String status, int UtdCash, int CashCounter, int cashValue_) async {
     print('insertcash being called');
     if(status == 'Dispensing')
     {
@@ -213,11 +253,73 @@ class _MyHomePageState extends State<MyHomePage> {
 
     if(status == 'Completed')
       {
+        String apiUrl = 'https://tqrdnqr-api.transpire.com.my/API/Exchange';
+        final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
+
+        final payloadtoken = {
+          "commandcode": "RequestToken",
+          "devicecode": deviceCode,
+          "result": "false",
+          "data": [
+            {"key": encryptedKey}
+          ]
+        };
+        // final response = await http.get(Uri.parse(apiUrl));
+        final responsetoken = await http.post(
+          Uri.parse(apiUrl),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: json.encode(payloadtoken),
+        );
+
+        final setcashpayload = {
+          "commandcode": "SetTransactionCash",
+          "devicecode": deviceCode,
+          "data": [
+            {
+              "statusstarttime": getFormattedDateTime(),
+              "utdcounter": UtdCash.toString(),
+              "cashcounter": CashCounter.toString(),
+              "utdCoinTube": "0.00",
+              "coinTubeCounter": "0.00",
+              "utdCoinBox": "0.00",
+              "coinBoxCounter": "0.00",
+              "amount": cashValue_.toString(),
+              "slot": "5",
+              "rssi": "-99"
+            }
+          ]
+        };
+
+
+        final privateKeyPem = await loadPrivateKey();
+            String signature =
+            await generateSignature(jsonEncode(setcashpayload), privateKeyPem);
+
+        if (responsetoken.statusCode == 200) {
+          final responseData = json.decode(responsetoken.body);
+          Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
+          String token = parsedJson['data'][0]['token'];
+
+          print('request token success');
+          final responseSetCashTrx =   http.post(
+            Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Token': token,
+              'Signature': signature
+            },
+            body: json.encode(setcashpayload),
+          );
+        }
+
+
         setState(() {
           CompletedDispense = true;
           FailedDispense == false;
         });
-        Future.delayed(Duration(seconds: 5), ()
+        Future.delayed(Duration(seconds: 2), ()
         {
           setState(() {
 
@@ -292,28 +394,32 @@ class _MyHomePageState extends State<MyHomePage> {
     final privateKeyPem = await loadPrivateKey();
     String signature =
     await generateSignature(jsonEncode(PaymentPayloadtrx), privateKeyPem);
-    // try {
-    //   final responsePaymentTRXEW = await http.post(
-    //     Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
-    //     headers: {
-    //       'Content-Type': 'application/json',
-    //       'Token': Token,
-    //       'Signature': signature
-    //     },
-    //     body: json.encode(PaymentPayloadtrx),
-    //   );
-    //
-    //   if (responsePaymentTRXEW.statusCode == 200) {
-    //     print('Transaction:Payment sent successfully');
-    //   } else {
-    //     print('Failed to send payment transaction. Status code: ${responsePaymentTRXEW.statusCode}');
-    //
-    //   }
-    // } catch (err) {
-    //   print('Error during fetch payment trx: $err');
-    // }
+    try {
+      final responsePaymentTRXEW = await http.post(
+        Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Token': Token,
+          'Signature': signature
+        },
+        body: json.encode(PaymentPayloadtrx),
+      );
+
+      if (responsePaymentTRXEW.statusCode == 200) {
+        print('Transaction:Payment sent successfully');
+      } else {
+        print('Failed to send payment transaction. Status code: ${responsePaymentTRXEW.statusCode}');
+
+      }
+    } catch (err) {
+      print('Error during fetch payment trx: $err');
+    }
 
     //success trx
+    print('before send success $UTDQR');
+
+
+   bool resultdis = await sendData(amounttodis);
 
     final SuccessPaymentPayloadtrx = {
       "commandcode": "DI_SetTransactionEWalletV2",
@@ -338,45 +444,40 @@ class _MyHomePageState extends State<MyHomePage> {
         }
       ]
     };
-    setState(() {
-      ClosingCall = true;
-    });
-
-   bool resultdis = await sendData(amounttodis);
 
    if(resultdis)
      {
        setState(() {
 
          FailedDispense = false;
-
          ClosingCall = false;
+         CompletedDispense = true;
 
        });
 
-       //fetch success api
-       // String signature =
-       // await generateSignature(jsonEncode(SuccessPaymentPayloadtrx), privateKeyPem);
-       // try {
-       //   final responseSuccessTRXEW = await http.post(
-       //     Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
-       //     headers: {
-       //       'Content-Type': 'application/json',
-       //       'Token': Token,
-       //       'Signature': signature
-       //     },
-       //     body: json.encode(PaymentPayloadtrx),
-       //   );
-       //
-       //   if (responseSuccessTRXEW.statusCode == 200) {
-       //     print('Transaction:Success sent successfully');
-       //   } else {
-       //     print('Failed to success transaction. Status code: ${responseSuccessTRXEW.statusCode}');
-       //
-       //   }
-       // } catch (err) {
-       //   print('Error during fetch success trx: $err');
-       // }
+       // fetch success api
+       String signature =
+       await generateSignature(jsonEncode(SuccessPaymentPayloadtrx), privateKeyPem);
+       try {
+         final responseSuccessTRXEW = await http.post(
+           Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+           headers: {
+             'Content-Type': 'application/json',
+             'Token': Token,
+             'Signature': signature
+           },
+           body: json.encode(SuccessPaymentPayloadtrx),
+         );
+
+         if (responseSuccessTRXEW.statusCode == 200) {
+           print('Transaction:Success sent successfully');
+         } else {
+           print('Failed to success transaction. Status code: ${responseSuccessTRXEW.statusCode}');
+
+         }
+       } catch (err) {
+         print('Error during fetch success trx: $err');
+       }
      }
 
    //failed dispense
@@ -393,20 +494,14 @@ class _MyHomePageState extends State<MyHomePage> {
 
    }
 
-    await Future.delayed(Duration(seconds: 2), () {
-      setState(() {
-        CompletedDispense = FailedDispense ? false : true;
-      });
 
 
-
-    });
-
-    await Future.delayed(Duration(seconds: 4), () {
+    await Future.delayed(Duration(seconds: 1), () {
       setState(() {
         ReceivedPayment = false;
         CompletedDispense = false;
         FailedDispense = false;
+        ClosingCall = false;
       });
     });
 
@@ -426,10 +521,11 @@ class _MyHomePageState extends State<MyHomePage> {
 
     print('initState called');
     checkConnection();
-    final String portName = '/dev/usb/tty2-1.4'; // 'COM5';
+    final String portName = '/dev/bus/usb/002/004'; // 'COM5';
      // const platform = MethodChannel('com.example.serialport');
     // Wrap the code in a try-catch block to handle errors
 
+    _loadSavedText(); // Load the saved text when the app starts
     WidgetsBinding.instance.addPostFrameCallback((_) async {
 
 
@@ -437,9 +533,9 @@ class _MyHomePageState extends State<MyHomePage> {
           // Try opening the port
           try {
 
-            communication = await Communication('');  // Ensure async initialization
+            communication = await Communication(portName);  // Ensure async initialization
 
-            print("Communication initialized with port: ${communication!.port}");
+
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text("Usb Port Connected")),
             );
@@ -502,6 +598,46 @@ class _MyHomePageState extends State<MyHomePage> {
 
   }
 
+  void _snackBar(String text){
+    final overlay = Overlay.of(context);
+    OverlayEntry? overlayEntry;
+
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).size.height * 0.15, // Position near the top (15% from the top)
+        left: (MediaQuery.of(context).size.width - 300) / 2, // Center horizontally with fixed width
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: 300,
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.greenAccent[700], // Background color
+              borderRadius: BorderRadius.circular(12), // Rounded corners
+            ),
+
+            child: Text(
+              text,
+              style: TextStyle(
+                color: Colors.white, // Text color
+                fontSize: 18, // Larger font size
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay?.insert(overlayEntry);
+
+    // Remove the overlay after 3 seconds
+    Future.delayed(Duration(seconds: 3), () {
+      overlayEntry?.remove();
+    });
+  }
+
 // Method to show the error dialog
   void _showErrorDialog() {
     if (context.mounted) {  // Check if the context is still valid
@@ -539,11 +675,15 @@ class _MyHomePageState extends State<MyHomePage> {
 
             if (referenceId == refId) {
               if (ClosingCall == false) {
+                setState(() {
+                  ClosingCall = true;
+                });
                 closingStatement();
                 setState(() {
                   ReceivedPayment = true; // Save the generated QR code URL
                 });
                 print('User has successfully paid');
+                break;
               }
 
               // mqttService.disconnect();
@@ -597,9 +737,9 @@ class _MyHomePageState extends State<MyHomePage> {
     Result? result = await communication?.main(command);
 
     if(result?.success == true) {
-
+      print('after result return ${result!.utdQr.toString()}');
       setState(() {
-        UTDQR = result!.utdQr.toString();
+        UTDQR = result.utdQr.toString();
       });
 
       return true;
@@ -826,6 +966,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
         setState(() {
           qrCodeImageUrl = qrcode; // Save the generated QR code URL
+          qrCompanyname = extractCompanyName(qrcode);
         });
 
         setState(() {
@@ -905,41 +1046,242 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _showPasswordDialog(BuildContext context) {
     final TextEditingController passwordController = TextEditingController();
+
     showDialog(
       context: context,
+      barrierDismissible:
+      false, // Prevents closing the dialog when clicking outside
       builder: (context) {
-        return AlertDialog(
-          title: Text('Enter Password'),
-          content: TextField(
-            controller: passwordController,
-            obscureText: true,
-            keyboardType: TextInputType.number, // Ensures only number keyboard appears
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly, // Limits input to digits only
-            ],
-            decoration: InputDecoration(hintText: "Password"),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                if (passwordController.text == "168168") {
-                  // Password is correct, close the dialog and exit app
-                  Navigator.pop(context);
-                  SystemNavigator.pop(); // Exit app
-                } else {
-                  // Incorrect password, show an error
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Incorrect password')),
-                  );
-                  Navigator.pop(context); // Close the dialog
-                }
-              },
-              child: Text('Submit'),
-            ),
-          ],
+        String contentMessage = "Enter Password";
+        bool isPasswordFieldVisible = true; // Controls whether the password field is visible
+        bool isShowTextVar = false;
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(isPasswordFieldVisible ? 'Authentication' : 'Setting'),
+              content: isPasswordFieldVisible
+                  ? TextField(
+                controller: passwordController,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+                decoration: InputDecoration(hintText: "Password"),
+              )
+                  : SizedBox(
+                width: 350, // Set a fixed width
+                height: 500, // Set a fixed height
+                child: Stack(
+                  children: [
+                    // Port Setting button
+                    if (!isShowTextVar)
+                    Positioned(
+                      top: 100, // Position it 50 pixels from the top
+                      left: 0, // Align to the left
+                      right: 0, // Align to the right
+                      child: ElevatedButton(
+                        onPressed: () {
+                          // Port setting logic
+                          _showErrorDialog(); //port recon
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent, // Set button background color
+                          minimumSize: Size(120, 50), // Set button size (width, height)
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12), // Rounded corners
+                          ),
+                        ),
+                        child: Text(
+                          'Port Connection',
+                          style: TextStyle(
+                            color: Colors.white, // Text color
+                            fontSize: 16, // Text size
+                            fontWeight: FontWeight.bold, // Text weight
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Port Setting button
+                    Positioned(
+                      top: 50, // Position it 50 pixels from the top
+                      left: 0, // Align to the left
+                      right: 0, // Align to the right
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if(!isShowTextVar)
+                            {
+                              _loadSavedText();
+                            setState(() {
+                              isShowTextVar = true;
+                            });
+                            }
+                          else{
+                            setState(() {
+                            isShowTextVar = false;
+                           });
+                          }
+                          // Port setting logic
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent, // Set button background color
+                          minimumSize: Size(120, 50), // Set button size (width, height)
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12), // Rounded corners
+                          ),
+                        ),
+                        child: Text(
+                          'Tips Variable',
+                          style: TextStyle(
+                            color: Colors.white, // Text color
+                            fontSize: 16, // Text size
+                            fontWeight: FontWeight.bold, // Text weight
+                          ),
+                        ),
+                      ),
+                    ),
+                Positioned(
+                  top: 115, // Position it 50 pixels from the top
+                  left: 0, // Align to the left
+                  right: 0, // Align to the right
+                   child : Column(
+                      children: [
+                        if (isShowTextVar) ...[
+                          // Display the saved text
+
+
+
+                          // TextField to input new text
+                          TextField(
+                            controller: _controller,
+                            maxLines: 6, // Set to allow 5 lines of text (adjust as needed)
+                            decoration: InputDecoration(
+                              labelText: 'Enter Text',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          SizedBox(height: 20),
+
+                          // Save Button
+                          ElevatedButton(
+                            onPressed: () {
+                              if (_controller.text.isNotEmpty) {
+                                setState(() {
+                                  isShowTextVar = false;
+                                });
+                                _saveText(_controller.text); // Save the entered text
+                                _controller.clear(); // Clear the TextField
+                                _snackBar('Text Saved!');
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blueAccent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              minimumSize: Size(double.infinity, 50), // Full width, fixed height
+                            ),
+                            child: Text(
+                              'Save',
+                              style: TextStyle(color: Colors.white, fontSize: 16),
+                            ),
+                          ),
+                        ] else ...[
+                          // Optional content to show when isShowTextVar is false
+                          Text(
+                            '',
+                            style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
+                          ),
+                        ],
+                      ],
+                    ),
+                ),
+                    if (!isShowTextVar)
+                    // Exit App button
+                    Positioned(
+                      bottom: 0, // Position it 50 pixels from the bottom
+                      left: 0, // Align to the left
+                      right: 0, // Align to the right
+                      child: SizedBox(
+                        width: double.infinity, // Full width of the parent container
+                        height: 50, // Fixed height
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            SystemNavigator.pop(); // Exit app
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red, // Background color
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12), // Rounded corners
+                            ),
+                          ),
+                          child: Text(
+                            'Exit App',
+                            style: TextStyle(
+                              color: Colors.white, // Text color
+                              fontSize: 16, // Text size
+                              fontWeight: FontWeight.bold, // Text weight
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+                actions: [
+                  if(isPasswordFieldVisible)
+                TextButton(
+                  onPressed: () {
+                    if (passwordController.text == "168168") {
+                      // Correct password, update the dialog content
+                      setState(() {
+                        isPasswordFieldVisible = false;
+                        contentMessage = "Access Granted!"; // Update the message
+                      });
+
+                    } else {
+                      // Incorrect password
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Incorrect password')),
+                      );
+                      setState(() {
+                        contentMessage = "Enter Password"; // Reset the message
+                        isPasswordFieldVisible = true;
+                      });
+                    }
+
+
+
+                  },
+                  child: Text('Submit'),
+                ),
+                  if(!isPasswordFieldVisible)
+                   TextButton(
+                    onPressed: () {
+                      if(isShowTextVar) {
+                        setState(() {
+                        isShowTextVar = false;
+                        });
+                      }
+                      else{
+                        Navigator.pop(context);
+                      }
+
+                    },
+                    child: Text(isShowTextVar ? 'Back' : 'Exit Setting'),
+                  ),
+              ],
+            );
+          },
         );
       },
     );
+
+
   }
 
   void _reConnectDialog(BuildContext context) {
@@ -1060,7 +1402,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               content: SizedBox(
                 width: 425, // Set a fixed width
-                height: 750, // Set a fixed height
+                height: 850, // Set a fixed height
                 child: Stack(
                   children: [
                     // Positioned title from the top
@@ -1115,7 +1457,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
 
                     Positioned(
-                      top: 190, // Position it from the top
+                      top: 185, // Position it from the top
                       left: 0,
                       right: 0,
                       child: Padding(
@@ -1157,9 +1499,10 @@ class _MyHomePageState extends State<MyHomePage> {
                         },
                       ),
                     ),
+
                     // Positioned QR image at the bottom of the dialog
                     Positioned(
-                      bottom: 0, // Position the image at the bottom
+                      top: 195, // Position the image at the bottom
                       left: 0,
                       right: 0,
                       child: Padding(
@@ -1169,9 +1512,22 @@ class _MyHomePageState extends State<MyHomePage> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              SizedBox(height: 30), // You can adjust the height as needed
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 5.0), // Extra margin from the bottom if needed
+                            child: Text(
+                              qrCompanyname,
+                              style: TextStyle(
+                                color: const Color(0xFFE52561),
+                                fontSize: 16.0,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
                               // QR code container
                               Container(
-                                margin: const EdgeInsets.only(bottom: 55.0), // Extra margin from the bottom if needed
+                                margin: const EdgeInsets.only(bottom: 40.0), // Extra margin from the bottom if needed
                                 decoration: BoxDecoration(
                                   border: Border.all(
                                     color: const Color(0xFFE52561), // Border color (same pinkish-red color)
@@ -1184,7 +1540,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                     ? QrImageView(
                                   data: qrCodeImageUrl ?? 'default_fallback_value',
                                   version: QrVersions.auto,
-                                  size: 320,
+                                  size: 355,
                                   gapless: false,
                                   foregroundColor: const Color(0xFFE52561), // QR code color
                                 )
@@ -1197,10 +1553,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
                               // Rectangle with "Scan code to pay"
                               Transform.translate(
-                                offset: const Offset(0, -45), // Move the container 10 units up (negative Y value)
+                                offset: const Offset(0, -30), // Move the container 10 units up (negative Y value)
                                 child: Container(
                                   width: screenWidth, // Adjust width
-                                  padding: const EdgeInsets.symmetric(vertical: 10.0),
+                                  padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 18.0), // Reduce left and right padding to 20
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFE52561), // Pinkish red background
                                     borderRadius: BorderRadius.circular(8.0), // Optional: Rounded corners
@@ -1220,7 +1576,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               // Row of 3 small logos
 
                               Transform.translate(
-                                offset: const Offset(0, -20), // Move the Row 10 units up (negative Y value)
+                                offset: const Offset(0, 10), // Move the Row 10 units up (negative Y value)
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
@@ -1323,7 +1679,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     style: TextStyle(
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
-                      color: Colors.lightBlue,
+                      color: Color(0xFF8F301E),
                       fontFamily: 'Arial', // Apply Arial-like font
                     ),
                   ),
@@ -1332,7 +1688,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     'Select the Package or insert cash to pay, the coin will be dispensed once the payment is done.',
                     style: TextStyle(
                       fontSize: 26,
-                      color: Colors.lightBlueAccent,
+                      color: Color(0xFF8F301E),
                       fontFamily: 'Arial', // Apply Arial-like font
                     ),
                   ),
@@ -1365,8 +1721,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         style: ElevatedButton.styleFrom(
                           minimumSize: Size(275,
                               200), // Set both width and height to make it square
-                          backgroundColor: Colors
-                              .blue.shade50, // Change background color here
+                          backgroundColor: Color(0xFFFEE902),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
                                 12), // Optional: rounded corners
@@ -1381,7 +1736,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                   fontSize: 32, // Larger size for "10"
                                   fontWeight: FontWeight.bold, // Bold text
                                   fontFamily: 'Arial', // Apply Arial-like font
-                                  color: Colors.lightBlue,
+                                  color: Color(0xFF8F301E),
                                 ),
                               ),
                               TextSpan(
@@ -1391,7 +1746,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                   fontSize: 26, // Smaller size for "MYR 10"
                                   fontWeight: FontWeight
                                       .normal, // Regular weight for the rest
-                                  color: Colors.lightBlue,
+                                  color: Color(0xFF8F301E),
                                 ),
                               ),
                             ],
@@ -1418,7 +1773,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         },
                         style: ElevatedButton.styleFrom(
                           minimumSize: Size(275, 200), //
-                          backgroundColor: Colors.blue.shade50,
+                          backgroundColor: Color(0xFFFEE902),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -1432,7 +1787,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                   fontSize: 32,
                                   fontWeight: FontWeight.bold,
                                   fontFamily: 'Arial',
-                                  color: Colors.lightBlue,
+                                  color: Color(0xFF8F301E),
                                 ),
                               ),
                               TextSpan(
@@ -1440,7 +1795,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                 style: TextStyle(
                                   fontSize: 26,
                                   fontWeight: FontWeight.normal,
-                                  color: Colors.lightBlue,
+                                  color: Color(0xFF8F301E),
                                 ),
                               ),
                             ],
@@ -1466,7 +1821,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         },
                         style: ElevatedButton.styleFrom(
                           minimumSize: Size(275, 200), //
-                          backgroundColor: Colors.blue.shade50,
+                          backgroundColor: Color(0xFFFEE902),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -1480,7 +1835,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                   fontSize: 32,
                                   fontWeight: FontWeight.bold,
                                   fontFamily: 'Arial',
-                                  color: Colors.lightBlue,
+                                  color: Color(0xFF8F301E),
                                 ),
                               ),
                               TextSpan(
@@ -1488,7 +1843,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                 style: TextStyle(
                                   fontSize: 26,
                                   fontWeight: FontWeight.normal,
-                                  color: Colors.lightBlue,
+                                  color: Color(0xFF8F301E),
                                 ),
                               ),
                             ],
@@ -1515,7 +1870,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         },
                         style: ElevatedButton.styleFrom(
                           minimumSize: Size(275, 200), //
-                          backgroundColor: Colors.blue.shade50,
+                          backgroundColor: Color(0xFFFEE902),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -1529,7 +1884,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                   fontSize: 32,
                                   fontWeight: FontWeight.bold,
                                   fontFamily: 'Arial',
-                                  color: Colors.lightBlue,
+                                  color: Color(0xFF8F301E),
                                 ),
                               ),
                               TextSpan(
@@ -1537,7 +1892,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                 style: TextStyle(
                                   fontSize: 26,
                                   fontWeight: FontWeight.normal,
-                                  color: Colors.lightBlue,
+                                  color: Color(0xFF8F301E),
                                 ),
                               ),
                             ],
@@ -1613,8 +1968,8 @@ class _MyHomePageState extends State<MyHomePage> {
                     alignment: Alignment.topLeft,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
+                      children: [
+                        const Text(
                           'Warm Tips',
                           style: TextStyle(
                             fontSize: 24,
@@ -1623,18 +1978,20 @@ class _MyHomePageState extends State<MyHomePage> {
                             fontFamily: 'Arial',
                           ),
                         ),
-                        SizedBox(height: 10),
+                        const SizedBox(height: 10),
                         Text(
-                          '1. Once the coins are dispensed, no refund request will be accepted.',
-                          style: TextStyle(
+                          _savedText.isEmpty ? '' : _savedText,
+                          // '1. Once the coins are dispensed, no refund request will be accepted.',
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Colors.grey,
                             fontFamily: 'Arial',
                           ),
                         ),
-                        Text(
-                          '2. Any question feel free to contact: 0173990160.',
+                        const Text(
+                          '',
+                          // '2. Any question feel free to contact: 0173990160.',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -1656,23 +2013,20 @@ class _MyHomePageState extends State<MyHomePage> {
             left: 0,
             right: 0,
             child: Center( // This will center the child within the Positioned widget
-              child: Column(
+              child:
+              Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset(
-                    'assets/images/logo-tb.png', // Replace with your image path
-                    width: 50.0, // Adjust the size of the image
-                    height: 50.0,
-                  ),
-                  SizedBox(height: 10),
                   Text(
                     "Powered by",
                     style: TextStyle(fontSize: 24),
                   ),
-                  Text(
-                    "Transpire Byte QR",
-                    style: TextStyle(fontSize: 16),
+                  Image.asset(
+                    'assets/images/logo-tb.png', // Replace with your image path
+                    width: 150.0, // Adjust the size of the image
+                    height: 60.0,
                   ),
+
                 ],
               ),
             ),
@@ -1837,4 +2191,26 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
     );
   }
+}
+Map<String, String> parseTLV(String data) {
+  Map<String, String> result = {};
+  int i = 0;
+
+  while (i < data.length) {
+    // Extract Tag (2 digits)
+    String tag = data.substring(i, i + 2);
+    i += 2;
+
+    // Extract Length (2 digits)
+    int length = int.parse(data.substring(i, i + 2));
+    i += 2;
+
+    // Extract Value (length of 'length')
+    String value = data.substring(i, i + length);
+    i += length;
+
+    result[tag] = value;
+  }
+
+  return result;
 }

@@ -33,8 +33,9 @@ class Communication {
   bool isSoldOut = false;
   bool isCompleteDispense = false;
   int dispenseAmount = 0;
-  int UtdQr = 0;
+  int totalUtdQr= 0;
   int UtdCash = 0;
+  int cashValue_ = 0;
   bool isDispenseCash = false;
 
   //init
@@ -297,7 +298,7 @@ class Communication {
         isSoldOut = true;
 
         if(isQr = false) {
-          myHomePageKey.currentState?.InsertCash('Failed');
+          myHomePageKey.currentState?.InsertCash('Failed', 0, 0, 0);
         }
         // Send the reply message
         _port!.write(resSoldOut2);
@@ -328,14 +329,15 @@ class Communication {
           print("Total Needed to Dispense: $totalNeeded");
           print("Remaining to Dispense: $RemainingtoDispense");
 
-          if(RemainingtoDispense == 0 && cashValue == 0)
-            {
-              isCompleteDispense = true;
-            }
+          // if(RemainingtoDispense == 0 && cashValue == 0)
+          //   {
+          //     isCompleteDispense = true;
+          //   }
 
           if(RemainingtoDispense > 0 && cashValue > 0){
-            myHomePageKey.currentState?.InsertCash('Dispensing');
+            myHomePageKey.currentState?.InsertCash('Dispensing', 0, 0, 0);
             isDispenseCash = true;
+            cashValue_ = cashValue;
             print('cash dispensing true');
           }
 
@@ -350,7 +352,6 @@ class Communication {
         print("Dispensed, QR UTD here.");
 
         // Check if the response length is correct
-        if (data.length == 22) {
 
 
           // Decode dynamic data
@@ -366,11 +367,11 @@ class Communication {
           print("Qr Dispense Counter: $QRDispenseCounter");
           print("UTD qr Dispense Counter: $UTDQRDispenseCounter");
 
-          UtdQr = UTDQRDispenseCounter;
+        totalUtdQr = UTDQRDispenseCounter;
 
-        } else {
-          print("Invalid response length.");
-        }
+
+          isCompleteDispense = true;
+
       }
 
       //UTD cash
@@ -410,7 +411,8 @@ class Communication {
           print("UTD Cash Counter: $UTDCASHCounter");
 
 
-            myHomePageKey.currentState?.InsertCash('Completed');
+
+            myHomePageKey.currentState?.InsertCash('Completed',UTDCASHCounter,CASHCounter, CASHDispenseCounter);
             isDispenseCash = false;
             print('cash dispense complete true');
 
@@ -527,7 +529,7 @@ class Communication {
     }
 
     // Optional: Disconnect after communication
-    await Future.delayed(Duration(milliseconds: timing)); // Adjust if needed
+    // await Future.delayed(Duration(milliseconds: timing)); // Adjust if needed
     // comm.disconnect();
 
     if(isSoldOut) {
@@ -546,11 +548,12 @@ class Communication {
         // If isCompleteDispense becomes true, return 'Completed'
         isCompleteDispense = false; // Reset the flag for future operations
         isQr = false;
-        return Result(success: true, message: '0', utdQr: UtdQr);
+        print('after result return $totalUtdQr');
+        return Result(success: true, message: '0', utdQr: totalUtdQr);
       }
 
       // Wait for the specified interval before retrying
-      await Future.delayed(Duration(milliseconds: 5000));
+      await Future.delayed(Duration(milliseconds: 2500));
       retries++;
     }
     isQr = false;
@@ -584,10 +587,14 @@ class Communication {
       0xDD
       // Checksum placeholder (0x83 is example)
     ];
+    int randomByte;
 
+    // Generate a random byte excluding 0xAA and 0xDD
+    do {
+      randomByte = Random().nextInt(256); // Generates a random number from 0 to 255
+    } while (randomByte == 0xAA || randomByte == 0xDD);
     // Generate a random byte for the placeholder
-    int randomByte =
-        Random().nextInt(256); // Generates a random number from 0 to 255
+
     command[10] = randomByte;
 
     //set amount
