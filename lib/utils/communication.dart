@@ -38,18 +38,28 @@ class Communication {
   int cashValue_ = 0;
   bool isDispenseCash = false;
 
+
+
   //init
-  Communication(String testPort) {
+  Communication(UsbDevice? testPort) {
 
+    try {
     findAndOpenDevice(testPort);
-    Future.delayed(Duration(seconds: 3), () {
-      setupCommunication();
-    });
 
-    Future.delayed(Duration(seconds: 5), () {
-     listenForResponse();
-    });
 
+    print('isconnected $isConnected');
+      Future.delayed(Duration(seconds: 3), () {
+        setupCommunication();
+        print('isconnected2 $isConnected');
+      });
+
+      Future.delayed(Duration(seconds: 5), () {
+        listenForResponse();
+      });
+    }
+    catch(e){
+      throw Exception(e);
+    }
 
 
   }
@@ -65,16 +75,38 @@ class Communication {
     }
   }
 
-  Future<bool> findAndOpenDevice(init) async {
-    // List all devices connected via USB
-    List<UsbDevice> devices = await UsbSerial.listDevices();
-    print('Devices : $devices');
-    // Find the device by its Vendor ID and Product ID
-    _device = devices.firstWhere(
-          (device) => device.deviceName == (init == '' ? '/dev/bus/usb/002/004' : init ),
-      // device.vid == 0x1A86 && device.pid == 0x7523, // Vendor ID: 1a86, Product ID: 7523
-      orElse: () => throw Exception("USB Serial device not found!"),
-    );
+  Future<bool> findAndOpenDevice(UsbDevice? init) async {
+
+    try {
+      // List all devices connected via USB
+      List<UsbDevice> devices = await UsbSerial.listDevices();
+      print('Devices : $devices');
+      // Find the device by its Vendor ID and Product ID
+      if(init == null) {
+        _device =
+        // null as UsbDevice; //testing
+        devices.firstWhere(
+            (device) =>
+             device.vid == 0x1A86 && device.pid == 0x7523,
+
+        // device.vid == 0x1A86 && device.pid == 0x7523, // Vendor ID: 1a86, Product ID: 7523
+        orElse: () => throw Exception("USB Serial device not found!"),
+
+      );
+      } else{
+        _device = init;
+      }
+
+      if (_device == null) {
+
+
+       return false;
+      }
+    }
+    catch(e){
+      throw Exception(e);
+    }
+
 
     // Open the device
     await openDevice(_device!);
@@ -83,21 +115,26 @@ class Communication {
 
   // Open the USB serial device
   Future<bool> openDevice(UsbDevice device) async {
-    _port = await device.create();
-    if (_port != null) {
-      bool opened = await _port!.open();
-      if (opened) {
-
-        print('Device opened successfully!');
-        return true;
-      } else {
-        print('Failed to open the device.');
+    try {
+      _port = await device.create();
+      if (_port != null) {
+        bool opened = await _port!.open();
+        if (opened) {
+          isConnected = true;
+          print('Device opened successfully!');
+          return true;
+        } else {
+          print('Failed to open the device.');
+          return false;
+        }
+      }
+      else {
+        print('Device not found');
         return false;
       }
     }
-    else{
-      print('Device not found');
-      return false;
+    catch(e){
+    throw Exception(e);
     }
   }
 
@@ -430,7 +467,58 @@ class Communication {
     });
   }
 
+  Future<Result> inject(int amount) async {
+    isQr = true;
+    Uint8List requestDispense = Uint8List.fromList([
+      0xAA,
+      0x0A,
+      0x01,
+      0xD1,
+      0x01,
+      0x00,
+      0x00,
+      0x00,
+      0x35,
+      0xDE,
+      0xE4,
+      0xD4,
+      0xDD
+    ]);
 
+    dispenseAmount = amount;
+    print('Sending RequestDispense20');
+    await sendData(requestDispense);
+
+
+    const int maxRetries = 30; // Maximum retries
+    int retries = 0;
+
+    // Retry until isCompleteDispense becomes true or retries exceed maxRetries
+    while (retries < maxRetries) {
+      if (isCompleteDispense) {
+        // If isCompleteDispense becomes true, return 'Completed'
+        isCompleteDispense = false; // Reset the flag for future operations
+        isQr = false;
+        print('after result return $totalUtdQr');
+        return Result(success: true, message: '0', utdQr: totalUtdQr);
+      }
+
+      // Wait for the specified interval before retrying
+      await Future.delayed(Duration(milliseconds: 2000));
+      retries++;
+    }
+
+    if(isSoldOut) {
+      isSoldOut = false;
+      isCompleteDispense = false;
+      isQr = false;
+
+      return Result(success: false, message: '1', utdQr: 0);
+    }
+    isQr = false;
+    // If retries exceed maxRetries, return 'Failed'
+    return Result(success: false, message: '2', utdQr : 0);
+  }
 
   // Main function to control the flow of communication
   Future<Result> main(String command) async {
@@ -532,14 +620,9 @@ class Communication {
     // await Future.delayed(Duration(milliseconds: timing)); // Adjust if needed
     // comm.disconnect();
 
-    if(isSoldOut) {
-      isSoldOut = false;
-      isCompleteDispense = false;
-      isQr = false;
-      return Result(success: false, message: '1', utdQr: 0);
-    }
 
-    const int maxRetries = 3; // Maximum retries
+
+    const int maxRetries = 30; // Maximum retries
     int retries = 0;
 
     // Retry until isCompleteDispense becomes true or retries exceed maxRetries
@@ -553,8 +636,16 @@ class Communication {
       }
 
       // Wait for the specified interval before retrying
-      await Future.delayed(Duration(milliseconds: 2500));
+      await Future.delayed(Duration(milliseconds: 2000));
       retries++;
+    }
+
+    if(isSoldOut) {
+      isSoldOut = false;
+      isCompleteDispense = false;
+      isQr = false;
+
+      return Result(success: false, message: '1', utdQr: 0);
     }
     isQr = false;
     // If retries exceed maxRetries, return 'Failed'
@@ -581,41 +672,42 @@ class Communication {
       // Random byte (placeholder)
       0x00,
       0x00,
-      0x0A, //13th amount, dafault 10
+      0x0A, //13th amount, default 10
       0x00,
       0x83,
       0xDD
       // Checksum placeholder (0x83 is example)
     ];
+
     int randomByte;
 
     // Generate a random byte excluding 0xAA and 0xDD
     do {
       randomByte = Random().nextInt(256); // Generates a random number from 0 to 255
     } while (randomByte == 0xAA || randomByte == 0xDD);
-    // Generate a random byte for the placeholder
 
+    // Assign the random byte
     command[10] = randomByte;
 
-    //set amount
-    if(dispenseAmount == 10){
+    // Set amount
+    if (dispenseAmount == 10) {
       command[13] = 0x0A;
-    }
-    else if(dispenseAmount == 20){
-      command[13] = 0x14; // Set the 10th element to hexadecimal 0x14
-    }
-    else if(dispenseAmount == 50){
-      command[13] = 0x32; // Set the 10th element to hexadecimal 0x14
-    }
-    else if(dispenseAmount == 100){
-      command[13] = 0x64; // Set the 10th element to hexadecimal 0x14
-    }
-    else {
-      command[13] = 0x00;
+    } else if (dispenseAmount == 20) {
+      command[13] = 0x14; // Set the 13th element to hexadecimal 0x14
+    } else if (dispenseAmount == 50) {
+      command[13] = 0x32; // Set the 13th element to hexadecimal 0x32
+    } else if (dispenseAmount == 100) {
+      command[13] = 0x64; // Set the 13th element to hexadecimal 0x64
+    } else {
+      if (dispenseAmount > 0xFF) {
+        dispenseAmount = 0xFF; // Cap the value at 255 (0xFF)
+      }
+
+      // Set the 13th element based on the dispenseAmount
+      command[13] = dispenseAmount;
     }
 
-
-    // Calculate checksum using XOR from index 1 to index 14 (excluding the checksum byte)
+    // Recalculate checksum using XOR from index 1 to index 14 (excluding the checksum byte)
     int checksum = command.sublist(1, 15).reduce((a, b) => a ^ b);
 
     // Assign the checksum to the second last element
@@ -624,4 +716,5 @@ class Communication {
     // Convert to Uint8List and return
     return Uint8List.fromList(command);
   }
+
 }

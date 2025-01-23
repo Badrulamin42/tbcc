@@ -26,6 +26,7 @@ void main() {
 }
 final GlobalKey<_MyHomePageState> myHomePageKey = GlobalKey<_MyHomePageState>(); // Create the GlobalKey
 bool isLoading = false;
+bool isLoadingboot = false;
 String deviceCode = "TQR000001"; // Replace with the actual device code
 String rssi = '-39';
 //set encryption obj
@@ -124,6 +125,33 @@ class MyHomePage extends StatefulWidget {
   _MyHomePageState createState() => _MyHomePageState();
 }
 
+class LoadingOverlay {
+  static OverlayEntry? _overlayEntry;
+
+  static void show(BuildContext context) {
+    if (_overlayEntry != null) return; // Prevent multiple overlays
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) {
+        return Positioned.fill(
+          child: Container(
+            color: Colors.black.withOpacity(0.5),
+            child: const Center(
+              child: CircularProgressIndicator(),
+            ),
+          ),
+        );
+      },
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  static void hide() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+}
 
 
 class _MyHomePageState extends State<MyHomePage> {
@@ -142,18 +170,36 @@ class _MyHomePageState extends State<MyHomePage> {
   String Errormsg = '';
   String ErrormsgConn = '';
   String ErrormsgInitConn = '';
-  List<String> myStringArray = [];
-  String? selectedPort; // Declare it inside the method, ensuring it's not null
+  List<UsbDevice> myStringArray = [];
+  UsbDevice? selectedPort; // Declare it inside the method, ensuring it's not null
   bool isConnected = false;
   String UTDQR = '0';
   String qrCompanyname = '';
   String _savedText = ''; // Variable to store the saved text
+  bool isDeviceFaulty = false;
+  String injectAmountstr = '0.00';
+  List<ConnectivityResult> _connectionStatus = [ConnectivityResult.none];
+  final Connectivity _connectivity = Connectivity();
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+
+  String getFormattedDateTime() {
+    final now = DateTime.now();
+    final formatter = DateFormat('yyyy-MM-dd HH:mm:ss');
+    return formatter.format(now);
+  }
 
   Future<void> _loadSavedText() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? savedText = prefs.getString('savedText') ?? '';
+    String? savedText = prefs.getString('savedText');
+    if (savedText == null || savedText.isEmpty) {
+      // If no saved text, assign a default value
+      savedText =
+          '1. Once the coins are dispensed, no refund request will be accepted.\n'
+          '2. Any question feel free to contact: 0173990160.'; // Set your desired default value
+      await prefs.setString('savedText', savedText); // Save default value
+    }
     setState(() {
-      _savedText = savedText;
+      _savedText = savedText!;
       _controller = TextEditingController(text: _savedText); // Set default text
     });
   }
@@ -166,20 +212,56 @@ class _MyHomePageState extends State<MyHomePage> {
       _savedText = text;
     });
   }
-  void checkConnection() async {
-    var connectivityResult = await (Connectivity().checkConnectivity());
-    print('conn : $connectivityResult');
-    if (connectivityResult.contains(ConnectivityResult.mobile) || connectivityResult.contains(ConnectivityResult.wifi)) {
 
-      setState(() {
-        isConnected = true;
-      });
-    } else {
-      setState(() {
-        isConnected = false;
-      });
+  Future<void> initConnectivity() async {
+    late List<ConnectivityResult> result;
+    // Platform messages may fail, so we use a try/catch PlatformException.
+    try {
+      result = await _connectivity.checkConnectivity();
+    } on PlatformException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Couldn\'t check connectivity status: $e')),
+      );
+      return;
     }
+
+    // If the widget was removed from the tree while the asynchronous platform
+    // message was in flight, discard the reply.
+    if (!mounted) {
+      return Future.value(null);
+    }
+
+    return _updateConnectionStatus(result);
   }
+
+  Future<void> _updateConnectionStatus(List<ConnectivityResult> result) async {
+    bool hasInternet = false;
+
+    // Check if connected to Wi-Fi or mobile
+    for (var connectivity in result) {
+      if (connectivity == ConnectivityResult.mobile || connectivity == ConnectivityResult.wifi) {
+        // Perform an internet check (e.g., ping Google)
+        try {
+          final response = await InternetAddress.lookup('8.8.8.8').timeout(Duration(seconds: 5));
+
+          hasInternet = response.isNotEmpty && response[0].rawAddress.isNotEmpty;
+
+        } catch (e) {
+          hasInternet = false;
+        }
+
+        setState(() {
+          isConnected = hasInternet; // Update connection status
+        });
+      }
+      break; // No need to check further once internet is found
+
+      }
+
+
+  }
+
+
 
   int clickCount = 0; // Counter to track clicks
 
@@ -240,6 +322,79 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     return result;
+  }
+
+  void Devicefaulty() async {
+
+    if(isDeviceFaulty == true)
+      {
+
+
+        return;
+      }
+
+    String apiUrl = 'https://tqrdnqr-api.transpire.com.my/API/Exchange';
+    final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
+
+    final payloadtoken = {
+      "commandcode": "RequestToken",
+      "devicecode": deviceCode,
+      "result": "false",
+      "data": [
+        {"key": encryptedKey}
+      ]
+    };
+    // final response = await http.get(Uri.parse(apiUrl));
+    final responsetoken = await http.post(
+      Uri.parse(apiUrl),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: json.encode(payloadtoken),
+    );
+
+
+    final setDeviceError = {
+      "commandcode": "SetDeviceError",
+      "devicecode": deviceCode,
+      "data": [
+        {
+          "deviceerrorcode": 3,
+          "description": "Coin acceptor fault",
+          "errorstart": getFormattedDateTime(),
+          "errorend": "1900-JAN-01 00:00:00",
+          "rssi": "-99"
+        }
+      ]
+    };
+
+    final privateKeyPem = await loadPrivateKey();
+    String signature =
+    await generateSignature(jsonEncode(setDeviceError), privateKeyPem);
+
+    if (responsetoken.statusCode == 200) {
+      final responseData = json.decode(responsetoken.body);
+      Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
+      String token = parsedJson['data'][0]['token'];
+
+      print('request token success');
+      final responseSetDeviceError =   http.post(
+        Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Token': token,
+          'Signature': signature
+        },
+        body: json.encode(setDeviceError),
+      );  print('error sent, success');
+
+    }
+
+    setState(() {
+      isDeviceFaulty = true;
+    });
+
+
   }
   void InsertCash(String status, int UtdCash, int CashCounter, int cashValue_) async {
     print('insertcash being called');
@@ -518,29 +673,52 @@ class _MyHomePageState extends State<MyHomePage> {
     List<UsbDevice> devices = [];
     UsbDevice? _device;
     UsbPort? _port;
-
+    setState(() {
+      isLoadingboot = true;
+    });
     print('initState called');
-    checkConnection();
-    final String portName = '/dev/bus/usb/002/004'; // 'COM5';
+
+    mqttConn(); // call mqtt
+    initConnectivity();
+
+    _connectivitySubscription =
+        _connectivity.onConnectivityChanged.listen(_updateConnectionStatus);
+    // final portName = ''; // 'COM5';
      // const platform = MethodChannel('com.example.serialport');
     // Wrap the code in a try-catch block to handle errors
 
     _loadSavedText(); // Load the saved text when the app starts
     WidgetsBinding.instance.addPostFrameCallback((_) async {
 
-
-
           // Try opening the port
           try {
 
-            communication = await Communication(portName);  // Ensure async initialization
+            communication = await Communication(null);  // Ensure async initialization
+
+           await Future.delayed(Duration(seconds: 3), () {
+              if(communication!.isConnected == false){
+                print("Error opening port");
 
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("Usb Port Connected")),
-            );
+                // setState(() {
+                //   ErrormsgInitConn = "Error opening port";
+                // });
+                _showErrorDialog();
+                setState(() {
+                  isLoadingboot = false;
+                });
+
+              }
+              else{
+                _snackBar('Port Connected');
+              }
+            });
+
 
           } catch (e) {
+            setState(() {
+              isLoadingboot = false;
+            });
             print("Error opening port: $e");
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text("Error opening port: $e")),
@@ -557,9 +735,11 @@ class _MyHomePageState extends State<MyHomePage> {
 
           devices = await UsbSerial.listDevices();
           setState(() {
-            myStringArray.addAll(devices.map((device) => device.deviceName)); // Use addAll directly
+            myStringArray.addAll(devices); // Use addAll directly
           });
-
+          setState(() {
+            isLoadingboot = false;
+          });
     });
 
 
@@ -572,6 +752,10 @@ class _MyHomePageState extends State<MyHomePage> {
 }
 
   void ReconnectCom(arr) async {
+    // setState(() {
+    //   isLoadingboot = true;
+    // });
+    LoadingOverlay.show(context);
     List<UsbDevice> devices = [];
     UsbDevice? _device;
     setState(() {
@@ -580,12 +764,26 @@ class _MyHomePageState extends State<MyHomePage> {
     devices = await UsbSerial.listDevices();
 
     setState(() {
-      myStringArray.addAll(devices.map((device) => device.deviceName)); // Use addAll directly
+      myStringArray.addAll(devices.map((device) => device)); // Use addAll directly
     });
     try {
       // Ensure the Communication initialization is async and handle errors properly
       communication = await Communication(arr);  // Ensure async initialization
+      await Future.delayed(Duration(seconds: 3), () {
+        if(communication!.isConnected == false){
+          print("Error opening port");
 
+
+          // setState(() {
+          //   ErrormsgInitConn = "Error opening port";
+          // });
+          _showErrorDialog();
+
+        }
+        else{
+          _snackBar('Port Connected');
+        }
+      });
     } catch (e) {
       _showErrorDialog();
       setState(() {
@@ -596,7 +794,15 @@ class _MyHomePageState extends State<MyHomePage> {
 
     }
 
+    // setState(() {
+    //   isLoadingboot = false;
+    // });
+
+    LoadingOverlay.hide();
+
   }
+
+
 
   void _snackBar(String text){
     final overlay = Overlay.of(context);
@@ -648,6 +854,106 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future<bool> injection(int injectamt) async {
+  final result = await communication?.inject(injectamt);
+
+   if(result?.success == true) {
+     // print('after result return ${result!.utdQr.toString()}');
+     setState(() {
+       UTDQR = result!.utdQr.toString();
+     });
+
+     String apiUrl = 'https://tqrdnqr-api.transpire.com.my/API/Exchange';
+     final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
+
+     final payloadtoken = {
+       "commandcode": "RequestToken",
+       "devicecode": deviceCode,
+       "result": "false",
+       "data": [
+         {"key": encryptedKey}
+       ]
+     };
+     // final response = await http.get(Uri.parse(apiUrl));
+     final responsetoken = await http.post(
+       Uri.parse(apiUrl),
+       headers: {
+         'Content-Type': 'application/json',
+       },
+       body: json.encode(payloadtoken),
+     );
+
+     final injectpayloadresponse =
+     {
+       "commandcode": "SetTransactionEWalletV2",
+       "devicecode": deviceCode,
+       "data": [{
+         "statusstarttime": getFormattedDateTime(),
+         "status": "Inject",
+         "eutdcounter": UTDQR,
+         "eamount": injectAmountstr,
+         "qrcode": "",
+         "ewallettransactionid": "64E833476D881728298275",
+         "ewallettypecode": "DUITNOW",
+         "numberofinquiry": "0",
+         "duration": "0/175",
+         "errorcode": "11",
+         "errormessage": "NO ITEM DISPENSE",
+         "ewallettestusercode": "",
+         "slot": "1",
+         "responsetime": "2",
+         "rssi": "-99"
+       }
+       ]
+     };
+
+     final privateKeyPem = await loadPrivateKey();
+
+     String signature =
+     await generateSignature(jsonEncode(injectpayloadresponse), privateKeyPem);
+
+     if (responsetoken.statusCode == 200) {
+       final responseData = json.decode(responsetoken.body);
+       Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
+       String token = parsedJson['data'][0]['token'];
+
+       print('request token success');
+       final responseSetinjectTrx =   http.post(
+         Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+         headers: {
+           'Content-Type': 'application/json',
+           'Token': token,
+           'Signature': signature
+         },
+         body: json.encode(injectpayloadresponse),
+       );
+
+
+     }
+
+
+     }
+
+
+   else{
+     setState(() {
+       if(result?.message == '1'){
+         Devicefaulty();
+         Errormsg = 'Token is out of Stock';
+         // isMachineFaulty = true;
+       }
+       else{
+         Errormsg =  'Timeout';
+       }
+
+     });
+
+     return false;
+   }
+
+    return true;
+  }
+
   @override
   void mqttConn() {
 
@@ -667,9 +973,36 @@ class _MyHomePageState extends State<MyHomePage> {
             // final result = item['result'] ?? 'Unknown';
             final data = item['data'] ?? {};
 
+
+            if(item['commandcode'] == 'SetInjectCredit')
+              {const List<int> validAmounts = [100, 200,300,400,500,600,700,800,900, 1000];
+                print('data inject : $data');
+
+                int injectamount = int.tryParse(data['amount'].toString()) ?? 0;
+
+              print('testing amount inj : $injectamount');
+                // Check if the parsed amount is valid
+                // if (!validAmounts.contains(injectamount / 100)) {
+                //   // If the amount is invalid, set it to 0 or handle it as you need
+                //   injectamount = 0;
+                // }
+                double damount = (injectamount / 100);
+                setState(() {
+                injectAmountstr = damount.toStringAsFixed(2);
+                });
+               injection( damount.toInt());
+
+               print('testing amount inj : $injectamount');
+
+              }
+
             // Access nested data fields
             // final expiryTime = data['expirytime'] ?? 'Unknown';
-            // final amount = data['amount'] ?? 'Unknown';
+            // final amount = data['amount'] ?? 'Unknown';//
+
+
+
+
             final referenceId = data['referenceid'] ?? 'Unknown';
 
 
@@ -691,7 +1024,7 @@ class _MyHomePageState extends State<MyHomePage> {
               // You can also dispose of any other resources if needed here
 
               // Future.delayed(Duration(seconds: 1), () {
-              dispose();
+              // dispose();
               // });
 
               break;
@@ -747,6 +1080,7 @@ class _MyHomePageState extends State<MyHomePage> {
     else{
       setState(() {
         if(result?.message == '1'){
+          Devicefaulty();
           Errormsg = 'Token is out of Stock';
           // isMachineFaulty = true;
         }
@@ -813,11 +1147,7 @@ class _MyHomePageState extends State<MyHomePage> {
     return encrypted.base64;
   }
 
-  String getFormattedDateTime() {
-    final now = DateTime.now();
-    final formatter = DateFormat('yyyy-MM-dd HH:mm:ss');
-    return formatter.format(now);
-  }
+
   Future<void> successfulDispense() async {
   //fetch api successful dispense
   }
@@ -1011,7 +1341,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
           final TRXEWResponseData = json.decode(response.body);
 
-          mqttConn(); // call mqtt
+
 
 
         } else {
@@ -1058,7 +1388,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
         return StatefulBuilder(
           builder: (context, setState) {
-            return AlertDialog(
+            return Stack(
+                children: [
+             AlertDialog(
               title: Text(isPasswordFieldVisible ? 'Authentication' : 'Setting'),
               content: isPasswordFieldVisible
                   ? TextField(
@@ -1076,6 +1408,43 @@ class _MyHomePageState extends State<MyHomePage> {
                 child: Stack(
                   children: [
                     // Port Setting button
+                    Positioned(
+                      top: 20, // Position it 50 pixels from the top
+                      left: 0, // Align to the left
+                      right: 0, // Align to the right
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if(!isShowTextVar)
+                          {
+                            _loadSavedText();
+                            setState(() {
+                              isShowTextVar = true;
+                            });
+                          }
+                          else{
+                            setState(() {
+                              isShowTextVar = false;
+                            });
+                          }
+                          // Port setting logic
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent, // Set button background color
+                          minimumSize: Size(120, 50), // Set button size (width, height)
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12), // Rounded corners
+                          ),
+                        ),
+                        child: Text(
+                          'Tips Variable',
+                          style: TextStyle(
+                            color: Colors.white, // Text color
+                            fontSize: 16, // Text size
+                            fontWeight: FontWeight.bold, // Text weight
+                          ),
+                        ),
+                      ),
+                    ),
                     if (!isShowTextVar)
                     Positioned(
                       top: 100, // Position it 50 pixels from the top
@@ -1104,43 +1473,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ),
                     // Port Setting button
-                    Positioned(
-                      top: 50, // Position it 50 pixels from the top
-                      left: 0, // Align to the left
-                      right: 0, // Align to the right
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if(!isShowTextVar)
-                            {
-                              _loadSavedText();
-                            setState(() {
-                              isShowTextVar = true;
-                            });
-                            }
-                          else{
-                            setState(() {
-                            isShowTextVar = false;
-                           });
-                          }
-                          // Port setting logic
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent, // Set button background color
-                          minimumSize: Size(120, 50), // Set button size (width, height)
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12), // Rounded corners
-                          ),
-                        ),
-                        child: Text(
-                          'Tips Variable',
-                          style: TextStyle(
-                            color: Colors.white, // Text color
-                            fontSize: 16, // Text size
-                            fontWeight: FontWeight.bold, // Text weight
-                          ),
-                        ),
-                      ),
-                    ),
+
                 Positioned(
                   top: 115, // Position it 50 pixels from the top
                   left: 0, // Align to the left
@@ -1275,6 +1608,8 @@ class _MyHomePageState extends State<MyHomePage> {
                     child: Text(isShowTextVar ? 'Back' : 'Exit Setting'),
                   ),
               ],
+            )
+                ],
             );
           },
         );
@@ -1285,63 +1620,74 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _reConnectDialog(BuildContext context) {
-
-
     showDialog(
       context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: Text('Could not connect default port, Please choose an available port'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min, // Ensures the dialog content fits the text and dropdown
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Add the extra text with a breakline
-                Text(
-                  "Initialize Error :  $ErrormsgInitConn\n\n Connection Error :  $ErrormsgConn", // Line break added here
-                  style: TextStyle(fontSize: 16),
-                ),
-                // DropdownButtonFormField with the selected port
-                DropdownButtonFormField<String>(
-                  value: selectedPort,  // Ensure selectedPort is reflected here
-                  hint: Text("Select a port"),
-                  onChanged: (String? newPort) {
-                    setState(() {
-                      selectedPort = newPort; // Update the selected port
-                      print("Selected Port: $selectedPort");  // Debugging
-                    });
-                  },
-                  items: myStringArray.map((String port) {
-                    return DropdownMenuItem<String>(
-                      value: port,
-                      child: Text(port),
+      builder: (context) {
+        return AlertDialog(
+          title: const Text(
+            'Could not connect to the default port. Please choose an available port.',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min, // Ensures the dialog fits content
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Display error messages with better formatting
+              Text(
+                "Initialize Error: $ErrormsgInitConn\n\nConnection Error: $ErrormsgConn",
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 16), // Add spacing between text and dropdown
+              // Dropdown for selecting available ports
+              DropdownButtonFormField<String>(
+                value: selectedPort?.deviceName, // Display the selected device name
+                hint: const Text("Select a port"),
+                items: myStringArray.map((device) {
+                  return DropdownMenuItem<String>(
+                    value: device.deviceName,
+                    child: Text(device.deviceName ?? "Unknown Device"),
+                  );
+                }).toList(),
+                onChanged: (String? newPort) {
+                  setState(() {
+                    // Update the selected port
+                    selectedPort = myStringArray.firstWhere(
+                          (device) => device.deviceName == newPort,
+                      orElse: () =>  null as UsbDevice, // Return null if no matching device is found
                     );
-                  }).toList(),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  if (selectedPort != null && selectedPort != "No available ports") {
-                    // Use the selected port for reconnection
-                    ReconnectCom(selectedPort!);
-                    Navigator.pop(context); // Close the dialog
-                  } else {
-                    // If no valid port is selected, show a message
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("Please select a valid port")),
-                    );
-                  }
+                    print("Selected Port: ${selectedPort?.deviceName}");
+                  });
                 },
-                child: Text('Connect'),
               ),
             ],
-          );
-        }
-
+          ),
+          actions: [
+            // "Connect" button
+            TextButton(
+              onPressed: () {
+                if (selectedPort != null) {
+                  // Attempt to reconnect with the selected port
+                  ReconnectCom(selectedPort!);
+                  Navigator.pop(context); // Close the dialog
+                } else {
+                  // Show a warning if no port is selected
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Please select a valid port.")),
+                  );
+                }
+              },
+              child: const Text('Connect'),
+            ),
+            // "Cancel" button
+            TextButton(
+              onPressed: () => Navigator.pop(context), // Close the dialog
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
     );
   }
+
 
 
   // Function to show modal popup
@@ -1457,7 +1803,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
 
                     Positioned(
-                      top: 185, // Position it from the top
+                      top: 190, // Position it from the top
                       left: 0,
                       right: 0,
                       child: Padding(
@@ -2176,6 +2522,89 @@ class _MyHomePageState extends State<MyHomePage> {
                               16), // Space between the progress indicator and text
                       const Text(
                         'Please wait, generating QR code...',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          if (isLoadingboot)
+            Positioned.fill(
+                child:
+            Container(
+              color:
+              Colors.black.withOpacity(0.5), // Semi-transparent background
+              child: Center(
+                child: Container(
+                  padding:
+                  const EdgeInsets.all(20), // Add padding inside the box
+                  decoration: BoxDecoration(
+                    color: Colors.white, // White background for the box
+                    borderRadius: BorderRadius.circular(12), // Rounded corners
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize
+                        .min, // Ensures the content takes minimum space
+                    crossAxisAlignment: CrossAxisAlignment
+                        .center, // Center the content horizontally
+                    children: [
+                      CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.blue), // You can change the color
+                      ),
+                      const SizedBox(
+                          height:
+                          16), // Space between the progress indicator and text
+                      const Text(
+                        'Please wait, Connecting port...',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            ),
+
+          if (isDeviceFaulty)
+
+            Container(
+              color:
+              Colors.black.withOpacity(0.5), // Semi-transparent background
+              child: Center(
+                child: Container(
+                  padding:
+                  const EdgeInsets.all(20), // Add padding inside the box
+                  decoration: BoxDecoration(
+                    color: Colors.white, // White background for the box
+                    borderRadius: BorderRadius.circular(12), // Rounded corners
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize
+                        .min, // Ensures the content takes minimum space
+                    crossAxisAlignment: CrossAxisAlignment
+                        .center, // Center the content horizontally
+                    children: [
+                      Icon(
+                      Icons.cancel,
+                        color: Colors.red ,
+                        size: 50, // Icon size
+                      ),
+                      const SizedBox(
+                          height:
+                          16), // Space between the progress indicator and text
+                      const Text(
+                        'Device fault detected',
                         style: TextStyle(
                           color: Colors.black,
                           fontSize: 16,
