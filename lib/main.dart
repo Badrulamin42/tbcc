@@ -482,40 +482,66 @@ class _MyHomePageState extends State<MyHomePage> {
         ]
       };
 
-      // fetch success api
-      if (responsetoken.statusCode == 200) {
+      const int maxRetries = 15; // Maximum retries
+      int retries = 0;
 
-        Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
-        String token = parsedJson['data'][0]['token'];
+      // Retry until isCompleteDispense becomes true or retries exceed maxRetries
+      while (retries < maxRetries) {
 
-        final privateKeyPem = await loadPrivateKey();
-        String signature =
-        await generateSignature(
-            jsonEncode(SuccessPaymentPayloadtrx), privateKeyPem);
+        print('test : ');
+        print(communication.isCompleteDispense);
 
-        final responseSuccessTRXEW = await http.post(
-          Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Token': token,
-            'Signature': signature
-          },
-          body: json.encode(SuccessPaymentPayloadtrx),
-        );
+        if (communication.isCompleteDispense) {
+          // If isCompleteDispense becomes true, return 'Completed'
+          communication.isCompleteDispense = false; // Reset the flag for future operations
 
-        if (responseSuccessTRXEW.statusCode == 200) {
-          print('Transaction:Success sent successfully');
+          // fetch success api
+          if (responsetoken.statusCode == 200) {
+
+            Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
+            String token = parsedJson['data'][0]['token'];
+
+            final privateKeyPem = await loadPrivateKey();
+            String signature =
+            await generateSignature(
+                jsonEncode(SuccessPaymentPayloadtrx), privateKeyPem);
+
+            final responseSuccessTRXEW = await http.post(
+              Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Token': token,
+                'Signature': signature
+              },
+              body: json.encode(SuccessPaymentPayloadtrx),
+            );
+
+            if (responseSuccessTRXEW.statusCode == 200) {
+              print('Transaction:Success sent successfully');
+            } else {
+              print(
+                  'Failed to success transaction. Status code: ${responseSuccessTRXEW
+                      .statusCode}');
+            }
+
+            await clearFailedTrx();
+            return;
+          }
         } else {
-          print(
-              'Failed to success transaction. Status code: ${responseSuccessTRXEW
-                  .statusCode}');
+          print("No failed transactions found.");
+        }
+          print('soldout returned');
+
+        // Wait for the specified interval before retrying
+        await Future.delayed(Duration(milliseconds: 2000));
+        retries++;
+
         }
 
-        await clearFailedTrx();
-      }
-    } else {
-      print("No failed transactions found.");
-    }
+
+        }
+
+
 
   }
   void InsertCash(String status, int UtdCash, int CashCounter, int cashValue_) async {
@@ -1232,6 +1258,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 setState(() {
                   ReceivedPayment = true; // Save the generated QR code URL
                 });
+                await clearFailedTrx();
                 print('User has successfully paid');
                 break;
               }
@@ -1274,7 +1301,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
 
   String status = 'Initializing...';
-  Communication? communication;
+  late Communication communication;
 
   // Connect to the port once
 
@@ -1284,10 +1311,10 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<bool> sendData(String command) async {
 
 
-    Result? result = await communication?.main(command);
+    Result? result = await communication.main(command);
 
-    if(result?.success == true) {
-      print('after result return ${result!.utdQr.toString()}');
+    if(result.success == true) {
+      print('after result return ${result.utdQr.toString()}');
       setState(() {
         UTDQR = result.utdQr.toString();
       });
@@ -1296,7 +1323,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
     else{
       setState(() {
-        if(result?.message == '1'){
+        if(result.message == '1'){
           Devicefaulty();
           Errormsg = 'Token is out of Stock';
           // isMachineFaulty = true;

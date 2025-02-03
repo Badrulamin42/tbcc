@@ -40,6 +40,7 @@ class Communication {
 
 
 
+
   //init
   Communication(UsbDevice? testPort) {
 
@@ -409,8 +410,11 @@ class Communication {
 
         totalUtdQr = UTDQRDispenseCounter;
 
+          if(QRDispenseCounter > 0)
+            {
+              isCompleteDispense = true;
+            }
 
-          isCompleteDispense = true;
 
       }
 
@@ -640,18 +644,20 @@ class Communication {
         return Result(success: true, message: '0', utdQr: totalUtdQr);
       }
 
+      if(isSoldOut) {
+        isSoldOut = false;
+        isCompleteDispense = false;
+        isQr = false;
+
+        return Result(success: false, message: '1', utdQr: 0);
+      }
+
       // Wait for the specified interval before retrying
       await Future.delayed(Duration(milliseconds: 2000));
       retries++;
     }
 
-    if(isSoldOut) {
-      isSoldOut = false;
-      isCompleteDispense = false;
-      isQr = false;
 
-      return Result(success: false, message: '1', utdQr: 0);
-    }
     isQr = false;
     // If retries exceed maxRetries, return 'Failed'
     return Result(success: false, message: '2', utdQr : 0);
