@@ -44,10 +44,11 @@ class Communication {
   Communication(UsbDevice? testPort) {
 
     try {
-    findAndOpenDevice(testPort);
+     findAndOpenDevice(testPort);
 
 
     print('isconnected $isConnected');
+
       Future.delayed(Duration(seconds: 3), () {
         setupCommunication();
         print('isconnected2 $isConnected');
@@ -290,7 +291,7 @@ class Communication {
 
  
 
-    _port!.inputStream?.listen((Uint8List data) {
+    _port!.inputStream?.listen((Uint8List data) async {
       print('Raw data: $data'); // Prints the raw data bytes
       print('Hex data: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}'); // Print hex data
 
@@ -322,7 +323,7 @@ class Communication {
       if (_listEquals(data, ReqResponse)) {
         print('Expected response received (reqDis). Sending reply...');
 
-        final discom = createDispenseCommand();
+        final discom = await createDispenseCommand();
         // Send the reply message
         _port!.write(discom);
         print(
@@ -333,6 +334,8 @@ class Communication {
       if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x0F && data[2] == 0x02 && data[3] == 0x14) {
         print('Expected response received (soldout). Sending reply...');
         isSoldOut = true;
+
+        myHomePageKey.currentState?.setLatestFailedTrx();
 
         if(isQr = false) {
           myHomePageKey.currentState?.InsertCash('Failed', 0, 0, 0);
@@ -503,18 +506,20 @@ class Communication {
         return Result(success: true, message: '0', utdQr: totalUtdQr);
       }
 
+      if(isSoldOut) {
+        isSoldOut = false;
+        isCompleteDispense = false;
+        isQr = false;
+
+        return Result(success: false, message: '1', utdQr: 0);
+      }
+
       // Wait for the specified interval before retrying
       await Future.delayed(Duration(milliseconds: 2000));
       retries++;
     }
 
-    if(isSoldOut) {
-      isSoldOut = false;
-      isCompleteDispense = false;
-      isQr = false;
 
-      return Result(success: false, message: '1', utdQr: 0);
-    }
     isQr = false;
     // If retries exceed maxRetries, return 'Failed'
     return Result(success: false, message: '2', utdQr : 0);
@@ -654,7 +659,7 @@ class Communication {
 
   //help & reply generator
 
-  Uint8List createDispenseCommand() {
+  Future<Uint8List> createDispenseCommand()  async {
     // Base command structure with fixed part and placeholders
     List<int> command = [
       0xAA,
@@ -699,13 +704,15 @@ class Communication {
     } else if (dispenseAmount == 100) {
       command[13] = 0x64; // Set the 13th element to hexadecimal 0x64
     } else {
-      if (dispenseAmount > 0xFF) {
+      if (dispenseAmount > 100) {
         dispenseAmount = 0xFF; // Cap the value at 255 (0xFF)
       }
 
       // Set the 13th element based on the dispenseAmount
       command[13] = dispenseAmount;
     }
+
+    print('dispense amount $dispenseAmount');
 
     // Recalculate checksum using XOR from index 1 to index 14 (excluding the checksum byte)
     int checksum = command.sublist(1, 15).reduce((a, b) => a ^ b);

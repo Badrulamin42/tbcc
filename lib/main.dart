@@ -188,6 +188,36 @@ class _MyHomePageState extends State<MyHomePage> {
     return formatter.format(now);
   }
 
+
+  Future<void> saveFailedTrx(String trxid, String amount, String utdqr) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    List<String> failedTrxList = prefs.getStringList('failed_trx') ?? [];
+
+    // Convert transaction details to a JSON string
+    Map<String, dynamic> trxData = {
+      'trxid': trxid,
+      'amount': amount,
+      'utdqr': utdqr,
+    };
+
+    failedTrxList.add(jsonEncode(trxData));
+
+    await prefs.setStringList('failed_trx', failedTrxList);
+  }
+
+  Future<List> getFailedTrx() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> failedTrxList = prefs.getStringList('failed_trx') ?? [];
+
+    return failedTrxList.map((trx) => jsonDecode(trx)).toList();
+  }
+
+  Future<void> clearFailedTrx() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('failed_trx');
+  }
+
   Future<void> _loadSavedText() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? savedText = prefs.getString('savedText');
@@ -390,10 +420,102 @@ class _MyHomePageState extends State<MyHomePage> {
 
     }
 
+    await saveFailedTrx(refId! , selectedAmount, UTDQR );
+
     setState(() {
       isDeviceFaulty = true;
     });
 
+
+  }
+
+  void setLatestFailedTrx() async {
+    List transactions = await getFailedTrx();
+
+    if (transactions.isNotEmpty) {
+      Map<String, dynamic> firstTransaction = transactions[0];  // Get the first item
+      final frefid = firstTransaction['trxid'];
+      final famount = firstTransaction['amount'];
+      final futdqr = firstTransaction['utdqr'];
+
+      String apiUrl = 'https://tqrdnqr-api.transpire.com.my/API/Exchange';
+      final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
+
+      final payloadtoken = {
+        "commandcode": "RequestToken",
+        "devicecode": deviceCode,
+        "result": "false",
+        "data": [
+          {"key": encryptedKey}
+        ]
+      };
+      // final response = await http.get(Uri.parse(apiUrl));
+      final responsetoken = await http.post(
+        Uri.parse(apiUrl),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(payloadtoken),
+      );
+
+      final SuccessPaymentPayloadtrx = {
+        "commandcode": "DI_SetTransactionEWalletV2",
+        "devicecode": deviceCode,
+        "data": [
+          {
+            "statusstarttime": getFormattedDateTime(),
+            "status": "Success",
+            "eutdcounter": futdqr,
+            "eamount": famount,
+            "qrcode": "",
+            "ewallettransactionid": frefid,
+            "ewallettypecode": "DUITNOW",
+            "numberofinquiry": "0",
+            "duration": "0/175",
+            "errorcode": "0",
+            "errormessage": "",
+            "ewallettestusercode": "",
+            "slot": "55",
+            "responsetime": "1",
+            "rssi": "114"
+          }
+        ]
+      };
+
+      // fetch success api
+      if (responsetoken.statusCode == 200) {
+
+        Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
+        String token = parsedJson['data'][0]['token'];
+
+        final privateKeyPem = await loadPrivateKey();
+        String signature =
+        await generateSignature(
+            jsonEncode(SuccessPaymentPayloadtrx), privateKeyPem);
+
+        final responseSuccessTRXEW = await http.post(
+          Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Token': token,
+            'Signature': signature
+          },
+          body: json.encode(SuccessPaymentPayloadtrx),
+        );
+
+        if (responseSuccessTRXEW.statusCode == 200) {
+          print('Transaction:Success sent successfully');
+        } else {
+          print(
+              'Failed to success transaction. Status code: ${responseSuccessTRXEW
+                  .statusCode}');
+        }
+
+        await clearFailedTrx();
+      }
+    } else {
+      print("No failed transactions found.");
+    }
 
   }
   void InsertCash(String status, int UtdCash, int CashCounter, int cashValue_) async {
@@ -681,6 +803,10 @@ class _MyHomePageState extends State<MyHomePage> {
     mqttConn(); // call mqtt
     initConnectivity();
 
+
+
+
+
     _connectivitySubscription =
         _connectivity.onConnectivityChanged.listen(_updateConnectionStatus);
     // final portName = ''; // 'COM5';
@@ -689,6 +815,29 @@ class _MyHomePageState extends State<MyHomePage> {
 
     _loadSavedText(); // Load the saved text when the app starts
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+
+      // //testing
+      // await saveFailedTrx("test123" , "10.00", "1000" );
+      // await clearFailedTrx();
+      print('test get trx failed ');
+      List transactions = await getFailedTrx();  // Await the function call
+      print(transactions);  // Print the result
+      // try {
+      //   final ports = await SerialPort.availablePorts;
+      //   print('flutterserialport $ports');
+      //
+      //   final port = await SerialPort('/dev/ttyS3');
+      //   port.config = await SerialPortConfig()
+      //     ..baudRate = 38400
+      //     ..stopBits = 1
+      //     ..parity = SerialPortParity.none
+      //     ..bits = 8;
+      //   bool isOpened = await communication!.port.openReadWrite();
+      //   print('is open flutterserialport $isOpened');
+      // }
+      // catch(e){
+      //   print("Error opening serial port: $e");
+      // }
 
           // Try opening the port
           try {
@@ -938,7 +1087,7 @@ class _MyHomePageState extends State<MyHomePage> {
    else{
      setState(() {
        if(result?.message == '1'){
-         Devicefaulty();
+         // Devicefaulty();
          Errormsg = 'Token is out of Stock';
          // isMachineFaulty = true;
        }
@@ -960,7 +1109,7 @@ class _MyHomePageState extends State<MyHomePage> {
     mqttService = MqttService();
 
     mqttService.connect(onMessageReceivedCallback: (message)
-    {
+    async {
       try {
         // Parse the JSON string into a Dart object (List<dynamic>)
         List<dynamic> parsedMessage = jsonDecode(message);
@@ -972,7 +1121,75 @@ class _MyHomePageState extends State<MyHomePage> {
             // final commandCode = item['commandcode'] ?? 'Unknown';
             // final result = item['result'] ?? 'Unknown';
             final data = item['data'] ?? {};
+            print('mqtt item : $item');
 
+            // if(item['SetReboot']){
+            //
+            // }
+
+            if(item['commandcode'] == 'SetPing'){
+              String trxid = data['transactionid'];
+
+              String apiUrl = 'https://tqrdnqr-api.transpire.com.my/API/Exchange';
+              final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
+
+              final payloadtoken = {
+                "commandcode": "RequestToken",
+                "devicecode": deviceCode,
+                "result": "false",
+                "data": [
+                  {"key": encryptedKey}
+                ]
+              };
+
+
+              final responsetoken = await http.post(
+                Uri.parse(apiUrl),
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: json.encode(payloadtoken),
+              );
+              // Make the POST request
+              print('request token');
+
+
+              final payloadsetdevice = {
+                "commandcode": "SetDeviceInfo",
+                "devicecode": deviceCode,
+                "data": [
+                  {
+                    "statusstarttime": getFormattedDateTime(),
+                    "esp32version": "1.05",
+                    "mdbversion": "MDB-2.01",
+                    "displayversion": "MDB-2062",
+                    "vmcinterface": "",
+                    "coinacceptor": "CLA",
+                    "transactionid": trxid,
+                    "responsetime": "2",
+                    "rssi": "-80"
+                  }
+                ]
+              };
+
+              // Handle the response
+              if (responsetoken.statusCode == 200) {
+                final responseData = json.decode(responsetoken.body);
+                Map<String, dynamic> parsedJson = jsonDecode(
+                    responsetoken.body);
+                String token = parsedJson['data'][0]['token'];
+                final responseSetDevice = await http.post(
+                  Uri.parse(apiUrl),
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Token' : token
+                  },
+                  body: json.encode(payloadsetdevice),
+                );
+              }
+
+
+            }
 
             if(item['commandcode'] == 'SetInjectCredit')
               {const List<int> validAmounts = [100, 200,300,400,500,600,700,800,900, 1000];
