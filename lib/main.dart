@@ -27,11 +27,7 @@ void main() {
 final GlobalKey<_MyHomePageState> myHomePageKey = GlobalKey<_MyHomePageState>(); // Create the GlobalKey
 bool isLoading = false;
 bool isLoadingboot = false;
-String deviceCode = "TQR000001"; // Replace with the actual device code
-String rssi = '-39';
-//set encryption obj
-const secretKey = r'24D7EB69ACD0!@#$'; // Must be 32 characters
-const ivString = '0192006944061854'; // Must be 16 characters
+
 String port = '';
 
 class MyApp extends StatelessWidget {
@@ -181,6 +177,12 @@ class _MyHomePageState extends State<MyHomePage> {
   List<ConnectivityResult> _connectionStatus = [ConnectivityResult.none];
   final Connectivity _connectivity = Connectivity();
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  List<Map<String, int>> coinPriceList = [];
+  String deviceCode = ""; // Replace with the actual device code
+  String rssi = '-39';
+//set encryption obj
+  String secretKey = ''; // Must be 32 characters
+  String ivString = ''; // Must be 16 characters
 
   String getFormattedDateTime() {
     final now = DateTime.now();
@@ -221,6 +223,67 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<void> _loadSavedText() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? savedText = prefs.getString('savedText');
+    String? savedData = prefs.getString('coinPriceList');
+    String? savedDeviceCode = prefs.getString('DeviceCode');
+    String? savedSecretKey = prefs.getString('SecretKey');
+    String? savedIVString = prefs.getString('IVString');
+
+    if (savedDeviceCode != null) {
+      setState(() {
+        deviceCode = savedDeviceCode;
+      });
+    }
+    else{
+      setState(() {
+        deviceCode = 'TQR000001';
+      });
+    }
+
+    //r'24D7EB69ACD0!@#$'
+
+    if (savedSecretKey != null) {
+      setState(() {
+        secretKey = savedSecretKey;
+      });
+    }
+    else{
+      setState(() {
+        secretKey =  r'24D7EB69ACD0!@#$';
+      });
+    }
+
+    if (savedIVString != null) {
+      setState(() {
+        ivString = savedIVString;
+      });
+    }
+    else{
+      setState(() {
+        ivString = '0192006944061854';
+      });
+    }
+
+    if (savedData != null) {
+      setState(() {
+        coinPriceList = List<Map<String, int>>.from(
+          jsonDecode(savedData).map((item) => Map<String, int>.from(item)),
+        );
+      });
+    }
+    else {
+      setState(() {
+        // Default values if no saved data is found
+        coinPriceList = [
+          {'coins': 10, 'price': 10},
+          {'coins': 20, 'price': 20},
+          {'coins': 50, 'price': 50},
+          {'coins': 100, 'price': 100},
+          {'coins': 200, 'price': 200},
+
+        ];
+      });
+      _saveData(); // Save default values so they persist
+    }
     if (savedText == null || savedText.isEmpty) {
       // If no saved text, assign a default value
       savedText =
@@ -241,6 +304,12 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       _savedText = text;
     });
+  }
+
+  // Save data to SharedPreferences
+  Future<void> _saveData() async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setString('coinPriceList', jsonEncode(coinPriceList));
   }
 
   Future<void> initConnectivity() async {
@@ -429,6 +498,214 @@ class _MyHomePageState extends State<MyHomePage> {
 
   }
 
+  void _showDeviceConfigModal(BuildContext context) async{
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    // Fetch latest values from SharedPreferences before opening the modal
+    String latestDeviceCode = prefs.getString('DeviceCode') ?? 'TQR000001';
+    String latestSecretKey = prefs.getString('SecretKey') ?? r'24D7EB69ACD0!@#$';
+    String latestIVString = prefs.getString('IVString') ?? '0192006944061854';
+
+    // Initialize controllers with updated values
+    TextEditingController deviceCodeController = TextEditingController(text: latestDeviceCode);
+    TextEditingController secretKeyController = TextEditingController(text: latestSecretKey);
+    TextEditingController ivStringController = TextEditingController(text: latestIVString);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Device Configuration'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: deviceCodeController,
+                  decoration: InputDecoration(labelText: 'Device Code'),
+                  onChanged: (value) {
+                    setState(() {
+                      deviceCodeController.text = value;
+                    });
+                  },
+                ),
+                SizedBox(height: 10),
+                TextField(
+                  controller: secretKeyController,
+                  decoration: InputDecoration(labelText: 'Secret Key'),
+                  obscureText: true, // Hide key for security
+                  onChanged: (value) {
+                    setState(() {
+                      secretKeyController.text = value;
+                    });
+                  },
+                ),
+                SizedBox(height: 10),
+                TextField(
+                  controller: ivStringController,
+                  decoration: InputDecoration(labelText: 'IV String'),
+                  onChanged: (value) {
+                    setState(() {
+                      ivStringController.text = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Close'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                // Save the updated values to SharedPreferences
+                SharedPreferences prefs = await SharedPreferences.getInstance();
+                await prefs.setString('DeviceCode', deviceCodeController.text);
+                await prefs.setString('SecretKey', secretKeyController.text);
+                await prefs.setString('IVString', ivStringController.text);
+                _loadSavedText();
+
+                // Close the modal
+                Navigator.pop(context);
+
+                // Optional: Show confirmation
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text("Settings Saved!"),
+                ));
+              },
+              child: Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
+  // Show modal with the list of all entries
+  void _showListModal(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text('Coins & Prices List'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(coinPriceList.length, (index) {
+                    final item = coinPriceList[index];
+                    TextEditingController coinsController =
+                    TextEditingController(text: item['coins'].toString());
+                    TextEditingController priceController =
+                    TextEditingController(text: item['price'].toString());
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: coinsController,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(labelText: 'Coins'),
+                              onChanged: (value) {
+                                int? newCoins = int.tryParse(value);
+                                if (newCoins != null) {
+                                  setState(() {
+                                    coinPriceList[index]['coins'] = newCoins;
+                                  });
+                                  _saveData();
+                                }
+                              },
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: priceController,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(labelText: 'Price'),
+                              onChanged: (value) {
+                                int? newPrice = int.tryParse(value);
+                                if (newPrice != null) {
+                                  setState(() {
+                                    coinPriceList[index]['price'] = newPrice;
+                                  });
+                                  _saveData();
+                                }
+                              },
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.delete, color: Colors.red),
+                            onPressed: () {
+                              setState(() {
+                                coinPriceList.removeAt(index);
+                              });
+                              _saveData();
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      coinPriceList.add({'coins': 0, 'price': 0}); // Add default values
+                    });
+                    _saveData();
+                  },
+                  child: Row(
+                    children: [Icon(Icons.add), Text(" Add")],
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Close'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Delete an item
+  void _deleteItem(int index) {
+    setState(() {
+      coinPriceList.removeAt(index);
+    });
+    _saveData();
+  }
+  // Add a new entry
+  void _addNewEntry() async {
+    // Add new entry
+    coinPriceList.add({'coins': 0, 'price': 0});
+    // Default values
+
+    // Save the data and reload asynchronously without blocking UI updates
+    _saveData().then((_) => _loadSavedText());
+    }
+
+  // Clear all stored data
+  Future<void> _clearData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('coinPriceList');
+    setState(() {
+      coinPriceList.clear();
+    });
+  }
+
+
   void setLatestFailedTrx() async {
     List transactions = await getFailedTrx();
 
@@ -458,29 +735,7 @@ class _MyHomePageState extends State<MyHomePage> {
         body: json.encode(payloadtoken),
       );
 
-      final SuccessPaymentPayloadtrx = {
-        "commandcode": "DI_SetTransactionEWalletV2",
-        "devicecode": deviceCode,
-        "data": [
-          {
-            "statusstarttime": getFormattedDateTime(),
-            "status": "Success",
-            "eutdcounter": futdqr,
-            "eamount": famount,
-            "qrcode": "",
-            "ewallettransactionid": frefid,
-            "ewallettypecode": "DUITNOW",
-            "numberofinquiry": "0",
-            "duration": "0/175",
-            "errorcode": "0",
-            "errormessage": "",
-            "ewallettestusercode": "",
-            "slot": "55",
-            "responsetime": "1",
-            "rssi": "114"
-          }
-        ]
-      };
+
 
       const int maxRetries = 15; // Maximum retries
       int retries = 0;
@@ -488,10 +743,35 @@ class _MyHomePageState extends State<MyHomePage> {
       // Retry until isCompleteDispense becomes true or retries exceed maxRetries
       while (retries < maxRetries) {
 
+
+
         print('test : ');
         print(communication.isCompleteDispense);
 
         if (communication.isCompleteDispense) {
+          final SuccessPaymentPayloadtrx = {
+            "commandcode": "DI_SetTransactionEWalletV2",
+            "devicecode": deviceCode,
+            "data": [
+              {
+                "statusstarttime": getFormattedDateTime(),
+                "status": "Success",
+                "eutdcounter": communication.totalUtdQr,
+                "eamount": famount,
+                "qrcode": "",
+                "ewallettransactionid": frefid,
+                "ewallettypecode": "DUITNOW",
+                "numberofinquiry": "0",
+                "duration": "0/175",
+                "errorcode": "0",
+                "errormessage": "",
+                "ewallettestusercode": "",
+                "slot": "55",
+                "responsetime": "1",
+                "rssi": "114"
+              }
+            ]
+          };
           // If isCompleteDispense becomes true, return 'Completed'
           communication.isCompleteDispense = false; // Reset the flag for future operations
 
@@ -527,8 +807,6 @@ class _MyHomePageState extends State<MyHomePage> {
             await clearFailedTrx();
             return;
           }
-        } else {
-          print("No failed transactions found.");
         }
           print('soldout returned');
 
@@ -539,9 +817,11 @@ class _MyHomePageState extends State<MyHomePage> {
         }
 
 
-        }
+    }
 
-
+    else {
+      print("No failed transactions found.");
+    }
 
   }
   void InsertCash(String status, int UtdCash, int CashCounter, int cashValue_) async {
@@ -1691,7 +1971,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
                     if (!isShowTextVar)
                     Positioned(
-                      top: 100, // Position it 50 pixels from the top
+                      top: 80, // Position it 50 pixels from the top
                       left: 0, // Align to the left
                       right: 0, // Align to the right
                       child: ElevatedButton(
@@ -1717,6 +1997,64 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ),
                     // Port Setting button
+
+                    if (!isShowTextVar)
+                      Positioned(
+                        top: 140, // Position it 50 pixels from the top
+                        left: 0, // Align to the left
+                        right: 0, // Align to the right
+                        child: ElevatedButton(
+                          onPressed: () {
+                            // Port setting logic
+                            // _loadSavedText();
+                            _showDeviceConfigModal(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blueAccent, // Set button background color
+                            minimumSize: Size(120, 50), // Set button size (width, height)
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12), // Rounded corners
+                            ),
+                          ),
+                          child: Text(
+                            'System Info',
+                            style: TextStyle(
+                              color: Colors.white, // Text color
+                              fontSize: 16, // Text size
+                              fontWeight: FontWeight.bold, // Text weight
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    if (!isShowTextVar)
+                      Positioned(
+                        top: 200, // Position it 50 pixels from the top
+                        left: 0, // Align to the left
+                        right: 0, // Align to the right
+                        child: ElevatedButton(
+                          onPressed: () {
+                            // Port setting logic
+                            _showListModal(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blueAccent, // Set button background color
+                            minimumSize: Size(120, 50), // Set button size (width, height)
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12), // Rounded corners
+                            ),
+                          ),
+                          child: Text(
+                            'Coins Setting',
+                            style: TextStyle(
+                              color: Colors.white, // Text color
+                              fontSize: 16, // Text size
+                              fontWeight: FontWeight.bold, // Text weight
+                            ),
+                          ),
+                        ),
+                      ),
+
 
                 Positioned(
                   top: 115, // Position it 50 pixels from the top
@@ -2291,205 +2629,58 @@ class _MyHomePageState extends State<MyHomePage> {
                     alignment: WrapAlignment.start, // Aligns buttons to the center
                     spacing: 20.0, // Adjusts the space between buttons
                     runSpacing: 20.0, // Adjusts the vertical space between rows of buttons
-                    children: [
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            selectedAmount = '10.00'; // Set the selected amount
-                          });
-                          handleButtonPress(
-                            context: context,
-                            amount: '10.00',
-                            currency: 'MYR',
-                            setLoading: (value) {
-                              setState(() {
-                                isLoading = value;
-                              });
-                            },
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: Size(275,
-                              200), // Set both width and height to make it square
-                          backgroundColor: Color(0xFFFEE902),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(
-                                12), // Optional: rounded corners
+                    children:
+                      coinPriceList.map((item) {
+                        String amount = item['price']!.toStringAsFixed(2); // Format price
+                        return ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              selectedAmount = amount;
+                            });
+                            handleButtonPress(
+                              context: context,
+                              amount: amount,
+                              currency: 'MYR',
+                              setLoading: (value) {
+                                setState(() {
+                                  isLoading = value;
+                                });
+                              },
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: Size(275, 200),
+                            backgroundColor: Color(0xFFFEE902),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                        ),
-                        child: const Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: '10 ',
-                                style: TextStyle(
-                                  fontSize: 32, // Larger size for "10"
-                                  fontWeight: FontWeight.bold, // Bold text
-                                  fontFamily: 'Arial', // Apply Arial-like font
-                                  color: Color(0xFF8F301E),
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: '${item['coins']} ',
+                                  style: TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Arial',
+                                    color: Color(0xFF8F301E),
+                                  ),
                                 ),
-                              ),
-                              TextSpan(
-                                text:
-                                    'Coins\nMYR 10.00', // Line break and the rest of the text
-                                style: TextStyle(
-                                  fontSize: 26, // Smaller size for "MYR 10"
-                                  fontWeight: FontWeight
-                                      .normal, // Regular weight for the rest
-                                  color: Color(0xFF8F301E),
+                                TextSpan(
+                                  text: 'Coins\nMYR $amount',
+                                  style: TextStyle(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.normal,
+                                    color: Color(0xFF8F301E),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                          textAlign:
-                              TextAlign.center, // This centers the whole text
-                        ),
-                      ), //1
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            selectedAmount = '20.00'; // Set the selected amount
-                          });
-                          handleButtonPress(
-                            context: context,
-                            amount: '20.00',
-                            currency: 'MYR',
-                            setLoading: (value) {
-                              setState(() {
-                                isLoading = value;
-                              });
-                            },
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: Size(275, 200), //
-                          backgroundColor: Color(0xFFFEE902),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: '20 ',
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Arial',
-                                  color: Color(0xFF8F301E),
-                                ),
-                              ),
-                              TextSpan(
-                                text: 'Coins\nMYR 20.00',
-                                style: TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.normal,
-                                  color: Color(0xFF8F301E),
-                                ),
-                              ),
-                            ],
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ), //2
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            selectedAmount = '50.00'; // Set the selected amount
-                          });
-                          handleButtonPress(
-                            context: context,
-                            amount: '50.00',
-                            currency: 'MYR',
-                            setLoading: (value) {
-                              setState(() {
-                                isLoading = value;
-                              });
-                            },
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: Size(275, 200), //
-                          backgroundColor: Color(0xFFFEE902),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: '50 ',
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Arial',
-                                  color: Color(0xFF8F301E),
-                                ),
-                              ),
-                              TextSpan(
-                                text: 'Coins\nMYR 50.00',
-                                style: TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.normal,
-                                  color: Color(0xFF8F301E),
-                                ),
-                              ),
-                            ],
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ), //3
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            selectedAmount =
-                                '100.00'; // Set the selected amount
-                          });
-                          handleButtonPress(
-                            context: context,
-                            amount: '100.00',
-                            currency: 'MYR',
-                            setLoading: (value) {
-                              setState(() {
-                                isLoading = value;
-                              });
-                            },
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: Size(275, 200), //
-                          backgroundColor: Color(0xFFFEE902),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: '100 ',
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Arial',
-                                  color: Color(0xFF8F301E),
-                                ),
-                              ),
-                              TextSpan(
-                                text: 'Coins\nMYR 100',
-                                style: TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.normal,
-                                  color: Color(0xFF8F301E),
-                                ),
-                              ),
-                            ],
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ), //4
+                        );
+                      }).toList(),
 
                       // ElevatedButton(
                       //   onPressed: () {
@@ -2551,7 +2742,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       //   ),
                       // ), //test
 
-                    ],
+
                   ),),
                   const SizedBox(height: 100),
                   Align(

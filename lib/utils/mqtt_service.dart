@@ -16,7 +16,9 @@ class MqttService {
   final String broker = 'transpireqr-api.transpire.com.my'; // Your broker address
   final int port = 8883; // Secure port for MQTT over SSL
   final String clientId = generateClientId(); // Unique client ID
-  Function(String)? onMessageReceived; // Callback for handling messages
+  Function(String)? onMessageReceived;
+
+  get deviceCode => null; // Callback for handling messages
 
   // Loads a certificate from assets
   Future<List<int>> loadCertificate(String fileName) async {
