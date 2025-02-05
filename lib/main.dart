@@ -178,6 +178,7 @@ class _MyHomePageState extends State<MyHomePage> {
   final Connectivity _connectivity = Connectivity();
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
   List<Map<String, int>> coinPriceList = [];
+  List<Map<String, int>> coinPriceListBonus = [];
   String deviceCode = ""; // Replace with the actual device code
   String rssi = '-39';
 //set encryption obj
@@ -224,6 +225,7 @@ class _MyHomePageState extends State<MyHomePage> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? savedText = prefs.getString('savedText');
     String? savedData = prefs.getString('coinPriceList');
+    String? savedDataBonus = prefs.getString('coinPriceListBonus');
     String? savedDeviceCode = prefs.getString('DeviceCode');
     String? savedSecretKey = prefs.getString('SecretKey');
     String? savedIVString = prefs.getString('IVString');
@@ -268,6 +270,10 @@ class _MyHomePageState extends State<MyHomePage> {
         coinPriceList = List<Map<String, int>>.from(
           jsonDecode(savedData).map((item) => Map<String, int>.from(item)),
         );
+
+        coinPriceListBonus = List<Map<String, int>>.from(
+          jsonDecode(savedDataBonus!).map((item) => Map<String, int>.from(item)),
+        );
       });
     }
     else {
@@ -279,6 +285,11 @@ class _MyHomePageState extends State<MyHomePage> {
           {'coins': 50, 'price': 50},
           {'coins': 100, 'price': 100},
           {'coins': 200, 'price': 200},
+
+        ];
+
+        coinPriceListBonus = [
+
 
         ];
       });
@@ -310,6 +321,7 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<void> _saveData() async {
     final prefs = await SharedPreferences.getInstance();
     prefs.setString('coinPriceList', jsonEncode(coinPriceList));
+    prefs.setString('coinPriceListBonus', jsonEncode(coinPriceListBonus));
   }
 
   Future<void> initConnectivity() async {
@@ -586,96 +598,157 @@ class _MyHomePageState extends State<MyHomePage> {
 
   // Show modal with the list of all entries
   void _showListModal(BuildContext context) {
+    List<Map<String, dynamic>> tempCoinPriceList = List.from(coinPriceList);
+    List<Map<String, dynamic>> tempCoinPriceListBonus = List.from(coinPriceListBonus);
+
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (context, setStateDialog) { // Local setState inside modal
             return AlertDialog(
               title: Text('Coins & Prices List'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: List.generate(coinPriceList.length, (index) {
-                    final item = coinPriceList[index];
-                    TextEditingController coinsController =
-                    TextEditingController(text: item['coins'].toString());
-                    TextEditingController priceController =
-                    TextEditingController(text: item['price'].toString());
-
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: coinsController,
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(labelText: 'Coins'),
-                              onChanged: (value) {
-                                int? newCoins = int.tryParse(value);
-                                if (newCoins != null) {
-                                  setState(() {
-                                    coinPriceList[index]['coins'] = newCoins;
-                                  });
-                                  _saveData();
-                                }
-                              },
-                            ),
-                          ),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: TextField(
-                              controller: priceController,
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(labelText: 'Price'),
-                              onChanged: (value) {
-                                int? newPrice = int.tryParse(value);
-                                if (newPrice != null) {
-                                  setState(() {
-                                    coinPriceList[index]['price'] = newPrice;
-                                  });
-                                  _saveData();
-                                }
-                              },
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.delete, color: Colors.red),
-                            onPressed: () {
-                              setState(() {
-                                coinPriceList.removeAt(index);
-                              });
-                              _saveData();
-                            },
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
+                  children: [
+                    _buildListSection(
+                      title: 'Regular',
+                      list: tempCoinPriceList,
+                      setState: setStateDialog, // Use modal's setState
+                    ),
+                    SizedBox(height: 20),
+                    _buildListSection(
+                      title: 'Bonus',
+                      list: tempCoinPriceListBonus,
+                      setState: setStateDialog, // Use modal's setState
+                      isBonus: true,
+                    ),
+                  ],
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    setState(() {
-                      coinPriceList.add({'coins': 0, 'price': 0}); // Add default values
-                    });
-                    _saveData();
-                  },
-                  child: Row(
-                    children: [Icon(Icons.add), Text(" Add")],
-                  ),
-                ),
-                TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: Text('Close'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      coinPriceList = List.from(tempCoinPriceList);
+                      coinPriceListBonus = List.from(tempCoinPriceListBonus);
+                    });
+                    _saveData();
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text("Settings Saved!"),
+                    ));
+                  },
+                  child: Text('Save'),
                 ),
               ],
             );
           },
         );
       },
+    );
+  }
+
+  Widget _buildListSection({
+    required String title,
+    required List<Map<String, dynamic>> list,
+    required StateSetter setState,
+    bool isBonus = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: title == 'Bonus' ? Colors.green : Colors.black,
+          ),
+        ),
+        SizedBox(height: 10),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(list.length, (index) {
+            TextEditingController coinsController =
+            TextEditingController(text: list[index]['coins'].toString());
+            TextEditingController priceController =
+            TextEditingController(text: list[index]['price'].toString());
+            TextEditingController? bonusController = isBonus
+                ? TextEditingController(text: list[index]['bonus'].toString())
+                : null;
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: coinsController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(labelText: 'Coins'),
+                          onChanged: (value) {
+                            list[index]['coins'] = int.tryParse(value) ?? 0;
+                          },
+                        ),
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: priceController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(labelText: 'Price'),
+                          onChanged: (value) {
+                            list[index]['price'] = int.tryParse(value) ?? 0;
+                          },
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.delete, color: Colors.red),
+                        onPressed: () {
+                          setState(() {
+                            list.removeAt(index);
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  if (isBonus) ...[
+                    SizedBox(height: 10),
+                    TextField(
+                      controller: bonusController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(labelText: 'Bonus'),
+                      onChanged: (value) {
+                        list[index]['bonus'] = int.tryParse(value) ?? 0;
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
+        ),
+        SizedBox(height: 10),
+        TextButton(
+          onPressed: () {
+            setState(() {
+              list.add({'coins': 0, 'price': 0, if (isBonus) 'bonus': 0});
+            });
+          },
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [Icon(Icons.add), Text(" Add $title")],
+          ),
+        ),
+      ],
     );
   }
 
@@ -2329,8 +2402,8 @@ class _MyHomePageState extends State<MyHomePage> {
                 borderRadius: BorderRadius.circular(10.0), // Adjust radius here
               ),
               content: SizedBox(
-                width: 425, // Set a fixed width
-                height: 850, // Set a fixed height
+                width: 600, // Set a fixed width
+                height: 1000, // Set a fixed height
                 child: Stack(
                   children: [
                     // Positioned title from the top
@@ -2468,14 +2541,14 @@ class _MyHomePageState extends State<MyHomePage> {
                                     ? QrImageView(
                                   data: qrCodeImageUrl ?? 'default_fallback_value',
                                   version: QrVersions.auto,
-                                  size: 355,
+                                  size: 530,
                                   gapless: false,
                                   foregroundColor: const Color(0xFFE52561), // QR code color
                                 )
                                     : Image.asset(
                                   'assets/images/errorpage.png', // Replace with your image path
-                                  height: 325, // Adjust dynamically based on screen height
-                                  width: 300, // Center the image and set the width
+                                  height: 525, // Adjust dynamically based on screen height
+                                  width: 500, // Center the image and set the width
                                 ),
                               ),
 
@@ -2509,22 +2582,22 @@ class _MyHomePageState extends State<MyHomePage> {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Image.asset(
-                                      'assets/images/tnglogo.png', // Replace with logo 1 image path
+                                      'assets/images/halolomerchantlist.png', // Replace with logo 1 image path
                                       height: 40.0, // Small size for the logos
                                       width: 40.0,
                                     ),
-                                    SizedBox(width: 10.0), // Space between logos
-                                    Image.asset(
-                                      'assets/images/grabpaylogo.png', // Replace with logo 2 image path
-                                      height: 40.0,
-                                      width: 40.0,
-                                    ),
-                                    SizedBox(width: 10.0),
-                                    Image.asset(
-                                      'assets/images/boostlogo.png', // Replace with logo 3 image path
-                                      height: 40.0,
-                                      width: 40.0,
-                                    ),
+                                    // SizedBox(width: 10.0), // Space between logos
+                                    // Image.asset(
+                                    //   'assets/images/grabpaylogo.png', // Replace with logo 2 image path
+                                    //   height: 40.0,
+                                    //   width: 40.0,
+                                    // ),
+                                    // SizedBox(width: 10.0),
+                                    // Image.asset(
+                                    //   'assets/images/boostlogo.png', // Replace with logo 3 image path
+                                    //   height: 40.0,
+                                    //   width: 40.0,
+                                    // ),
                                   ],
                                 ),
                               )
@@ -2546,7 +2619,86 @@ class _MyHomePageState extends State<MyHomePage> {
       timer?.cancel(); // Ensure the timer is canceled when the dialog is closed
     });
   }
-
+  Widget _buildCoinButton({
+    required BuildContext context,
+    required int coins,
+    required String amount,
+    required bool isSpecialOffer,
+    int? bonus, // Optional for special offers
+  }) {
+    return SizedBox(
+      width: isSpecialOffer ? 580 : 275, // Special offer takes double width
+      child: ElevatedButton(
+        onPressed: () {
+          setState(() {
+            selectedAmount = amount;
+          });
+          handleButtonPress(
+            context: context,
+            amount: amount,
+            currency: 'MYR',
+            setLoading: (value) {
+              setState(() {
+                isLoading = value;
+              });
+            },
+          );
+        },
+        style: ElevatedButton.styleFrom(
+          minimumSize: Size(275, 200),
+          backgroundColor: isSpecialOffer ? Color(0xFFD32F2F) : Color(0xFFFEE902),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: EdgeInsets.all(isSpecialOffer ? 24 : 16), // More padding for special offer
+        ),
+        child: Text.rich(
+          TextSpan(
+            children: [
+              if (isSpecialOffer) ...[
+                TextSpan(
+                  text: '🔥 Special Sale! 🔥\n',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+              TextSpan(
+                text: '$coins ',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Arial',
+                  color: isSpecialOffer ? Colors.white : Color(0xFF8F301E),
+                ),
+              ),
+              TextSpan(
+                text: 'Coins\nMYR $amount',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.normal,
+                  color: isSpecialOffer ? Colors.white70 : Color(0xFF8F301E),
+                ),
+              ),
+              if (isSpecialOffer && bonus != null) ...[
+                TextSpan(
+                  text: '\n+ Bonus $bonus Coins 🎁',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.yellowAccent,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width; // Get screen width
@@ -2625,125 +2777,35 @@ class _MyHomePageState extends State<MyHomePage> {
                           30), // Add space between description and content below
                   Center(
                     child:
-                  Wrap(
-                    alignment: WrapAlignment.start, // Aligns buttons to the center
-                    spacing: 20.0, // Adjusts the space between buttons
-                    runSpacing: 20.0, // Adjusts the vertical space between rows of buttons
-                    children:
-                      coinPriceList.map((item) {
-                        String amount = item['price']!.toStringAsFixed(2); // Format price
-                        return ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              selectedAmount = amount;
-                            });
-                            handleButtonPress(
-                              context: context,
-                              amount: amount,
-                              currency: 'MYR',
-                              setLoading: (value) {
-                                setState(() {
-                                  isLoading = value;
-                                });
-                              },
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: Size(275, 200),
-                            backgroundColor: Color(0xFFFEE902),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: '${item['coins']} ',
-                                  style: TextStyle(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.bold,
-                                    fontFamily: 'Arial',
-                                    color: Color(0xFF8F301E),
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: 'Coins\nMYR $amount',
-                                  style: TextStyle(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.normal,
-                                    color: Color(0xFF8F301E),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        );
-                      }).toList(),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        // Regular Coins
+                        ...coinPriceList.map((item) {
+                          String amount = item['price']!.toStringAsFixed(2);
+                          return _buildCoinButton(
+                            context: context,
+                            coins: item['coins'] ?? 0,
+                            amount: amount,
+                            isSpecialOffer: false,
+                          );
+                        }).toList(),
 
-                      // ElevatedButton(
-                      //   onPressed: () {
-                      //
-                      //     sendData('UTDQR');
-                      //   },
-                      //   style: ElevatedButton.styleFrom(
-                      //     minimumSize: Size(200, 150),
-                      //     backgroundColor: Colors.blue.shade50,
-                      //     shape: RoundedRectangleBorder(
-                      //       borderRadius: BorderRadius.circular(12),
-                      //     ),
-                      //   ),
-                      //   child: const Text.rich(
-                      //     TextSpan(
-                      //       children: [
-                      //         TextSpan(
-                      //           text: 'test utdqr',
-                      //           style: TextStyle(
-                      //             fontSize: 24,
-                      //             fontWeight: FontWeight.bold,
-                      //             fontFamily: 'Arial',
-                      //             color: Colors.lightBlue,
-                      //           ),
-                      //         ),
-                      //
-                      //       ],
-                      //     ),
-                      //     textAlign: TextAlign.center,
-                      //   ),
-                      // ), //test
-                      // ElevatedButton(
-                      //   onPressed: () {
-                      //     sendData('Dis10');
-                      //   },
-                      //   style: ElevatedButton.styleFrom(
-                      //     minimumSize: Size(200, 150),
-                      //     backgroundColor: Colors.blue.shade50,
-                      //     shape: RoundedRectangleBorder(
-                      //       borderRadius: BorderRadius.circular(12),
-                      //     ),
-                      //   ),
-                      //   child: const Text.rich(
-                      //     TextSpan(
-                      //       children: [
-                      //         TextSpan(
-                      //           text: 'Dis 10',
-                      //           style: TextStyle(
-                      //             fontSize: 24,
-                      //             fontWeight: FontWeight.bold,
-                      //             fontFamily: 'Arial',
-                      //             color: Colors.lightBlue,
-                      //           ),
-                      //         ),
-                      //
-                      //       ],
-                      //     ),
-                      //     textAlign: TextAlign.center,
-                      //   ),
-                      // ), //test
-
-
-                  ),),
+                        // Bonus Coins
+                        ...coinPriceListBonus.map((item) {
+                          String amount = item['price']!.toStringAsFixed(2);
+                          return _buildCoinButton(
+                            context: context,
+                            coins: item['coins'] ?? 0,
+                            amount: amount,
+                            isSpecialOffer: true, // Apply special offer style
+                            bonus: item['bonus'], // Pass the bonus value
+                          );
+                        }).toList(),
+                      ],
+                    )
+                  ),
                   const SizedBox(height: 100),
                   Align(
                     alignment: Alignment.topLeft,
@@ -3056,6 +3118,8 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 }
+
+
 Map<String, String> parseTLV(String data) {
   Map<String, String> result = {};
   int i = 0;
