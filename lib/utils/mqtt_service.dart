@@ -6,20 +6,20 @@ import 'dart:io';
 import 'package:tbcc/main.dart'; // For dealing with certificates
 
 // Generate a unique client ID based on the device data and current timestamp
-String generateClientId() {
-  final deviceData = 'TQR000001';
-  return 'flutter_${deviceData.hashCode}_${DateTime.now().millisecondsSinceEpoch}';
-}
+
 
 class MqttService {
   late MqttServerClient client;
   final String broker = 'transpireqr-api.transpire.com.my'; // Your broker address
   final int port = 8883; // Secure port for MQTT over SSL
-  final String clientId = generateClientId(); // Unique client ID
-  Function(String)? onMessageReceived;
+  late String clientId;
+  Function(String)? onMessageReceived; // Callback for handling messages
+   String deviceCode;
 
-  get deviceCode => null; // Callback for handling messages
-
+  // Constructor with required named parameter
+  MqttService({required this.deviceCode}) {
+    clientId = 'flutter_${deviceCode.hashCode}_${DateTime.now().millisecondsSinceEpoch}';
+  }
   // Loads a certificate from assets
   Future<List<int>> loadCertificate(String fileName) async {
     try {
@@ -61,7 +61,7 @@ class MqttService {
       try {
         print('Connecting to MQTT broker...');
         await client.connect();
-        print('Connected to MQTT broker.');
+        print('Connected to MQTT broker. $deviceCode');
         print('Connection status: ${client.connectionStatus!.state}');
 
         subscribeToTopic('/TQR/$deviceCode'); // Replace with your topic

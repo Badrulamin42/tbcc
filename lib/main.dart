@@ -15,7 +15,7 @@ import 'dart:io';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'utils/mqtt_service.dart'; // Import the MQTT service class
 import 'utils/communication.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:network_info_plus/network_info_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_usb/flutter_usb.dart';
 const String appTag = "com.example.tbcc";
@@ -153,6 +153,7 @@ class LoadingOverlay {
 class _MyHomePageState extends State<MyHomePage> {
   late TextEditingController _controller; // Text editing controller
   String selectedAmount = ''; // Store the selected amount as state
+  int selectedAmountCoin = 0; // Store the selected amount as state
   String? qrCodeImageUrl;
   String? refId = '';
   String? random = '';
@@ -177,13 +178,15 @@ class _MyHomePageState extends State<MyHomePage> {
   List<ConnectivityResult> _connectionStatus = [ConnectivityResult.none];
   final Connectivity _connectivity = Connectivity();
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
-  List<Map<String, int>> coinPriceList = [];
-  List<Map<String, int>> coinPriceListBonus = [];
+  List<Map<String, dynamic>> coinPriceList = [];
+  List<Map<String, dynamic>> coinPriceListBonus = [];
   String deviceCode = ""; // Replace with the actual device code
   String rssi = '-39';
 //set encryption obj
   String secretKey = ''; // Must be 32 characters
   String ivString = ''; // Must be 16 characters
+  int remainingTodispenseAm = 0;
+  String? _macAddress;
 
   String getFormattedDateTime() {
     final now = DateTime.now();
@@ -191,6 +194,14 @@ class _MyHomePageState extends State<MyHomePage> {
     return formatter.format(now);
   }
 
+  Future<void> _getMacAddress() async {
+    final info = NetworkInfo();
+    String? mac = await info.getWifiBSSID(); // Gets the BSSID (MAC of the connected router)
+
+    setState(() {
+      _macAddress = mac ?? "Unknown";
+    });
+  }
 
   Future<void> saveFailedTrx(String trxid, String amount, String utdqr) async {
     final prefs = await SharedPreferences.getInstance();
@@ -220,6 +231,27 @@ class _MyHomePageState extends State<MyHomePage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('failed_trx');
   }
+// Method to set default values for coinPriceList
+  void _setDefaultCoinPriceList() {
+    setState(() {
+      coinPriceList = [
+        {'coins': 10, 'price': 10},
+        {'coins': 20, 'price': 20},
+        {'coins': 50, 'price': 50},
+        {'coins': 100, 'price': 100},
+        {'coins': 200, 'price': 200},
+      ];
+    });
+  }
+
+// Method to set default values for coinPriceListBonus
+  void _setDefaultCoinPriceListBonus() {
+    setState(() {
+      coinPriceListBonus = [
+        {'coins': 0, 'price': 0, 'bonus': 0},
+      ];
+    });
+  }
 
   Future<void> _loadSavedText() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -229,84 +261,70 @@ class _MyHomePageState extends State<MyHomePage> {
     String? savedDeviceCode = prefs.getString('DeviceCode');
     String? savedSecretKey = prefs.getString('SecretKey');
     String? savedIVString = prefs.getString('IVString');
-
-    if (savedDeviceCode != null) {
-      setState(() {
-        deviceCode = savedDeviceCode;
-      });
-    }
-    else{
-      setState(() {
-        deviceCode = 'TQR000001';
-      });
-    }
-
-    //r'24D7EB69ACD0!@#$'
-
-    if (savedSecretKey != null) {
-      setState(() {
-        secretKey = savedSecretKey;
-      });
-    }
-    else{
-      setState(() {
-        secretKey =  r'24D7EB69ACD0!@#$';
-      });
-    }
-
-    if (savedIVString != null) {
-      setState(() {
-        ivString = savedIVString;
-      });
-    }
-    else{
-      setState(() {
-        ivString = '0192006944061854';
-      });
+    List<dynamic> decodedBonusList = [];
+    // Handle device code
+    setState(() {
+      deviceCode = savedDeviceCode ?? 'TQR000001';
+      secretKey = savedSecretKey ?? r'24D7EB69ACD0!@#$';
+      ivString = savedIVString ?? '0192006944061854';
+    });
+    print('test saved data');
+      print(savedData);
+    // Load Regular Coin Price List
+    if (savedData != null && savedData.isNotEmpty) {
+      try {
+        List<dynamic> decodedList = jsonDecode(savedData);
+        setState(() {
+          coinPriceList = decodedList.map<Map<String, int>>((item) {
+            return {
+              'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
+              'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
+            };
+          }).toList();
+        });
+      } catch (e) {
+        print("Error parsing coinPriceList: $e");
+        _setDefaultCoinPriceList();  // Set default if error occurs
+      }
+    } else {
+      _setDefaultCoinPriceList();  // Set default if data is missing
     }
 
-    if (savedData != null) {
-      setState(() {
-        coinPriceList = List<Map<String, int>>.from(
-          jsonDecode(savedData).map((item) => Map<String, int>.from(item)),
-        );
 
-        coinPriceListBonus = List<Map<String, int>>.from(
-          jsonDecode(savedDataBonus!).map((item) => Map<String, int>.from(item)),
-        );
-      });
+    if (savedDataBonus != null && savedDataBonus.isNotEmpty) {
+      try {
+        List<dynamic> decodedBonusList = jsonDecode(savedDataBonus);
+        setState(() {
+          coinPriceListBonus = decodedBonusList.map<Map<String, int>>((item) {
+            return {
+              'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
+              'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
+              'bonus': (item['bonus'] is int) ? item['bonus'] : int.tryParse(item['bonus'].toString()) ?? 0,
+            };
+          }).toList();
+        });
+      } catch (e) {
+        print("Error parsing coinPriceListBonus: $e");
+        _setDefaultCoinPriceListBonus();  // Set default if error occurs
+      }
+    } else {
+      _setDefaultCoinPriceListBonus();  // Set default if data is missing
     }
-    else {
-      setState(() {
-        // Default values if no saved data is found
-        coinPriceList = [
-          {'coins': 10, 'price': 10},
-          {'coins': 20, 'price': 20},
-          {'coins': 50, 'price': 50},
-          {'coins': 100, 'price': 100},
-          {'coins': 200, 'price': 200},
 
-        ];
-
-        coinPriceListBonus = [
-
-
-        ];
-      });
-      _saveData(); // Save default values so they persist
-    }
+    // Load or Set Default Text
     if (savedText == null || savedText.isEmpty) {
-      // If no saved text, assign a default value
       savedText =
-          '1. Once the coins are dispensed, no refund request will be accepted.\n'
-          '2. Any question feel free to contact: 0173990160.'; // Set your desired default value
-      await prefs.setString('savedText', savedText); // Save default value
+      '1. Once the coins are dispensed, no refund request will be accepted.\n'
+          '2. Any question feel free to contact: 0173990160.';
+      await prefs.setString('savedText', savedText);
     }
+
     setState(() {
       _savedText = savedText!;
-      _controller = TextEditingController(text: _savedText); // Set default text
+      _controller = TextEditingController(text: _savedText);
     });
   }
+
 
   // Save text to shared preferences
   Future<void> _saveText(String text) async {
@@ -317,11 +335,28 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  // Save data to SharedPreferences
   Future<void> _saveData() async {
     final prefs = await SharedPreferences.getInstance();
-    prefs.setString('coinPriceList', jsonEncode(coinPriceList));
-    prefs.setString('coinPriceListBonus', jsonEncode(coinPriceListBonus));
+
+    // Convert all values to int explicitly
+    List<Map<String, dynamic>> cleanedCoinPriceList = coinPriceList.map((item) {
+      return {
+        'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
+        'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
+      };
+    }).toList();
+
+    List<Map<String, dynamic>> cleanedCoinPriceListBonus = coinPriceListBonus.map((item) {
+      return {
+        'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
+        'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
+        'bonus': (item['bonus'] is int) ? item['bonus'] : int.tryParse(item['bonus'].toString()) ?? 0,
+      };
+    }).toList();
+
+    // Save as JSON string
+    prefs.setString('coinPriceList', jsonEncode(cleanedCoinPriceList));
+    prefs.setString('coinPriceListBonus', jsonEncode(cleanedCoinPriceListBonus));
   }
 
   Future<void> initConnectivity() async {
@@ -545,7 +580,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 TextField(
                   controller: secretKeyController,
                   decoration: InputDecoration(labelText: 'Secret Key'),
-                  obscureText: true, // Hide key for security
+                  // obscureText: true, // Hide key for security
                   onChanged: (value) {
                     setState(() {
                       secretKeyController.text = value;
@@ -562,6 +597,10 @@ class _MyHomePageState extends State<MyHomePage> {
                     });
                   },
                 ),
+                SizedBox(height: 10),
+                Text(
+                  'MAC address : $_macAddress'
+                )
               ],
             ),
           ),
@@ -600,6 +639,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void _showListModal(BuildContext context) {
     List<Map<String, dynamic>> tempCoinPriceList = List.from(coinPriceList);
     List<Map<String, dynamic>> tempCoinPriceListBonus = List.from(coinPriceListBonus);
+
 
     showDialog(
       context: context,
@@ -668,17 +708,16 @@ class _MyHomePageState extends State<MyHomePage> {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: title == 'Bonus' ? Colors.green : Colors.black,
+            color: isBonus ? Colors.green : Colors.black,
           ),
         ),
         SizedBox(height: 10),
         Column(
           mainAxisSize: MainAxisSize.min,
           children: List.generate(list.length, (index) {
-            TextEditingController coinsController =
-            TextEditingController(text: list[index]['coins'].toString());
-            TextEditingController priceController =
-            TextEditingController(text: list[index]['price'].toString());
+            // Use unique controllers per row
+            TextEditingController coinsController = TextEditingController(text: list[index]['coins'].toString());
+            TextEditingController priceController = TextEditingController(text: list[index]['price'].toString());
             TextEditingController? bonusController = isBonus
                 ? TextEditingController(text: list[index]['bonus'].toString())
                 : null;
@@ -695,7 +734,9 @@ class _MyHomePageState extends State<MyHomePage> {
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(labelText: 'Coins'),
                           onChanged: (value) {
-                            list[index]['coins'] = int.tryParse(value) ?? 0;
+                            setState(() {
+                              list[index]['coins'] = int.tryParse(value) ?? 0;
+                            });
                           },
                         ),
                       ),
@@ -706,7 +747,9 @@ class _MyHomePageState extends State<MyHomePage> {
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(labelText: 'Price'),
                           onChanged: (value) {
-                            list[index]['price'] = int.tryParse(value) ?? 0;
+                            setState(() {
+                              list[index]['price'] = int.tryParse(value) ?? 0;
+                            });
                           },
                         ),
                       ),
@@ -720,14 +763,16 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ],
                   ),
-                  if (isBonus) ...[
+                  if (isBonus && bonusController != null) ...[
                     SizedBox(height: 10),
                     TextField(
                       controller: bonusController,
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(labelText: 'Bonus'),
                       onChanged: (value) {
-                        list[index]['bonus'] = int.tryParse(value) ?? 0;
+                        setState(() {
+                          list[index]['bonus'] = int.tryParse(value) ?? 0; // Ensure 'bonus' is always an int
+                        });
                       },
                     ),
                   ],
@@ -740,7 +785,11 @@ class _MyHomePageState extends State<MyHomePage> {
         TextButton(
           onPressed: () {
             setState(() {
-              list.add({'coins': 0, 'price': 0, if (isBonus) 'bonus': 0});
+              list.add({
+                'coins': 0 as int,
+                'price': 0 as int,
+                if (isBonus) 'bonus': 0 as int, // Explicitly cast bonus as int
+              });
             });
           },
           child: Row(
@@ -751,6 +800,7 @@ class _MyHomePageState extends State<MyHomePage> {
       ],
     );
   }
+
 
   // Delete an item
   void _deleteItem(int index) {
@@ -777,7 +827,11 @@ class _MyHomePageState extends State<MyHomePage> {
       coinPriceList.clear();
     });
   }
-
+  void remainingToDispense(int remaining) async {
+    setState(() {
+      remainingTodispenseAm = remaining;
+    });
+  }
 
   void setLatestFailedTrx() async {
     List transactions = await getFailedTrx();
@@ -987,7 +1041,7 @@ class _MyHomePageState extends State<MyHomePage> {
       }
 
     if(status == 'Failed') {
-
+      Devicefaulty();
       setState(() {
 
         ReceivedPayment = true;
@@ -1001,27 +1055,27 @@ class _MyHomePageState extends State<MyHomePage> {
   //Completing progress
   void closingStatement() async {
 
-    String amounttodis = "0";
-    if(selectedAmount == "10.00"){
-      amounttodis = "Req10";
+    int? amounttodis = 0;
+    // Convert selectedAmount to an integer
+    int? amount = int.tryParse(selectedAmount.split('.')[0]); // Extract integer part
+
+    print('amount tah ye : $amount');
+    // Search in coinPriceList
+    for (var item in coinPriceList) {
+      if (item['price'] == amount) {
+        amounttodis = item['coins']; // Return coins if price matches
+        break; // Stop searching
+      }
     }
 
-    else if(selectedAmount == "20.00"){
-      amounttodis = "Req20";
+    if (amounttodis == 0) {
+      for (var item in coinPriceListBonus) {
+        if (item['price'] == amount) {
+          amounttodis = (item['coins']! + (item['bonus'] ?? 0)); // Include bonus coins
+          break;
+        }
+      }
     }
-
-    else if(selectedAmount == "50.00"){
-      amounttodis = "Req50";
-    }
-
-    else if(selectedAmount == "100.00"){
-      amounttodis = "Req100";
-    }
-
-    else{
-      return;
-    }
-
     //submit trx payload
 
     final PaymentPayloadtrx = {
@@ -1075,7 +1129,7 @@ class _MyHomePageState extends State<MyHomePage> {
     print('before send success $UTDQR');
 
 
-   bool resultdis = await sendData(amounttodis);
+   bool resultdis = await sendData(amounttodis!);
 
     final SuccessPaymentPayloadtrx = {
       "commandcode": "DI_SetTransactionEWalletV2",
@@ -1181,7 +1235,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     mqttConn(); // call mqtt
     initConnectivity();
-
+    _getMacAddress();
 
 
 
@@ -1483,10 +1537,11 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   @override
-  void mqttConn() {
+  void mqttConn() async{
+   await _loadSavedText();
 
-    mqttService = MqttService();
 
+   MqttService mqttService = MqttService(deviceCode: deviceCode);
     mqttService.connect(onMessageReceivedCallback: (message)
     async {
       try {
@@ -1661,7 +1716,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
 
 
-  Future<bool> sendData(String command) async {
+  Future<bool> sendData(int command) async {
 
 
     Result? result = await communication.main(command);
@@ -2090,7 +2145,7 @@ class _MyHomePageState extends State<MyHomePage> {
                             ),
                           ),
                           child: Text(
-                            'System Info',
+                            'Device Setting',
                             style: TextStyle(
                               color: Colors.white, // Text color
                               fontSize: 16, // Text size
@@ -2402,8 +2457,8 @@ class _MyHomePageState extends State<MyHomePage> {
                 borderRadius: BorderRadius.circular(10.0), // Adjust radius here
               ),
               content: SizedBox(
-                width: 600, // Set a fixed width
-                height: 1000, // Set a fixed height
+                width: 650, // Set a fixed width
+                height: 1300, // Set a fixed height
                 child: Stack(
                   children: [
                     // Positioned title from the top
@@ -2556,7 +2611,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               Transform.translate(
                                 offset: const Offset(0, -30), // Move the container 10 units up (negative Y value)
                                 child: Container(
-                                  width: screenWidth, // Adjust width
+                                  width: 575, // Adjust width
                                   padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 18.0), // Reduce left and right padding to 20
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFE52561), // Pinkish red background
@@ -2566,7 +2621,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                     'Scan code to pay',
                                     style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 16.0,
+                                      fontSize: 32.0,
                                       fontWeight: FontWeight.bold,
                                     ),
                                     textAlign: TextAlign.center,
@@ -2583,8 +2638,8 @@ class _MyHomePageState extends State<MyHomePage> {
                                   children: [
                                     Image.asset(
                                       'assets/images/halolomerchantlist.png', // Replace with logo 1 image path
-                                      height: 40.0, // Small size for the logos
-                                      width: 40.0,
+                                      height: 300.0, // Small size for the logos
+                                      width: 525.0,
                                     ),
                                     // SizedBox(width: 10.0), // Space between logos
                                     // Image.asset(
@@ -2632,6 +2687,7 @@ class _MyHomePageState extends State<MyHomePage> {
         onPressed: () {
           setState(() {
             selectedAmount = amount;
+            selectedAmountCoin = coins;
           });
           handleButtonPress(
             context: context,
@@ -2793,7 +2849,9 @@ class _MyHomePageState extends State<MyHomePage> {
                         }).toList(),
 
                         // Bonus Coins
-                        ...coinPriceListBonus.map((item) {
+                        ...coinPriceListBonus
+                            .where((item) => item['coins']! > 0 && item['price']! > 0)
+                            .map((item) {
                           String amount = item['price']!.toStringAsFixed(2);
                           return _buildCoinButton(
                             context: context,
@@ -3100,8 +3158,9 @@ class _MyHomePageState extends State<MyHomePage> {
                       const SizedBox(
                           height:
                           16), // Space between the progress indicator and text
-                      const Text(
-                        'Device fault detected',
+                       Text(
+                        'Soldout! \n' 'Remaining Token : $remainingTodispenseAm'
+                            ,
                         style: TextStyle(
                           color: Colors.black,
                           fontSize: 16,

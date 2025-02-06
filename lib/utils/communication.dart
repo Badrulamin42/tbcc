@@ -382,6 +382,8 @@ class Communication {
             print('cash dispensing true');
           }
 
+          myHomePageKey.currentState?.remainingToDispense(RemainingtoDispense);
+
 
         } else {
           print("Invalid response length.");
@@ -455,15 +457,17 @@ class Communication {
           print("UTD Cash Counter: $UTDCASHCounter");
 
 
+            if(CASHDispenseCounter > 0 && UTDCASHDispenseCounter > 0 &&  CASHCounter > 0) {
+              myHomePageKey.currentState?.InsertCash(
+                  'Completed', UTDCASHCounter, CASHCounter,
+                  CASHDispenseCounter);
 
-            myHomePageKey.currentState?.InsertCash('Completed',UTDCASHCounter,CASHCounter, CASHDispenseCounter);
-            isDispenseCash = false;
-            print('cash dispense complete true');
+              isDispenseCash = false;
+              print('cash dispense complete true');
 
 
-
-
-          UtdCash = UTDCASHDispenseCounter;
+              UtdCash = UTDCASHDispenseCounter;
+            }
 
         } else {
           print("Invalid response length.");
@@ -530,7 +534,7 @@ class Communication {
   }
 
   // Main function to control the flow of communication
-  Future<Result> main(String command) async {
+  Future<Result> main(int command) async {
     isQr = true;
     int timing = 2000; // default for 10coin
 
@@ -584,46 +588,14 @@ class Communication {
     ]);
 
     // Send data based on command
-    if (command == 'Req10') {
-      timing = 1000;
-      dispenseAmount = 10;
-      print('Sending RequestDispense10');
-      await sendData(requestDispense);
-    }
-    else if(command == 'Req20'){
-      timing = 2500;
-      dispenseAmount = 20;
-      print('Sending RequestDispense20');
-      await sendData(requestDispense);
-    }
-    else if(command == 'Req50'){
-      timing = 4000;
-      dispenseAmount = 50;
-      print('Sending RequestDispense50');
-      await sendData(requestDispense);
-    }
-    else if(command == 'Req100'){
-      timing = 6500;
-      dispenseAmount = 100;
-      print('Sending RequestDispense100');
-      await sendData(requestDispense);
-    }
-    else if(command == 'UTDQR'){
+      if(command > 0) {
+        dispenseAmount = command;
 
-
-      print('Sending UTDQR');
-      await sendData(UTDQR);
-    }
-    else if(command == 'UTDCASH'){
-
-
-      print('Sending UTDCASH');
-      await sendData(UTDCASH);
-    }
-
-    else {
-      print('Unknown command');
-    }
+        await sendData(requestDispense);
+      }
+      else{
+        print('Unknown command');
+      }
 
     // Optional: Disconnect after communication
     // await Future.delayed(Duration(milliseconds: timing)); // Adjust if needed
