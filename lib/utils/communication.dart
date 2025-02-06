@@ -603,7 +603,7 @@ class Communication {
 
 
 
-    const int maxRetries = 30; // Maximum retries
+    const int maxRetries = 10; // Maximum retries
     int retries = 0;
 
     // Retry until isCompleteDispense becomes true or retries exceed maxRetries

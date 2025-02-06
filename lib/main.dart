@@ -3,7 +3,7 @@ import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:convert'; // For JSON encoding/decoding
-import 'package:flutter/services.dart' show FilteringTextInputFormatter, MethodChannel, PlatformException, SystemNavigator, Uint8List, rootBundle;
+import 'package:flutter/services.dart' show FilteringTextInputFormatter, MethodChannel, PlatformException, SystemNavigator, TextInputFormatter, Uint8List, rootBundle;
 import 'package:intl/intl.dart';
 import 'package:usb_serial/usb_serial.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,7 +29,15 @@ bool isLoading = false;
 bool isLoadingboot = false;
 
 String port = '';
-
+class IntegerInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    // Allow only digits
+    final newText = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    return newValue.copyWith(text: newText, selection: TextSelection.collapsed(offset: newText.length));
+  }
+}
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -43,6 +51,7 @@ class MyApp extends StatelessWidget {
       print("Failed to initialize BootReceiver: '${e.message}'.");
     }
   }
+
 
 
   @override
@@ -187,6 +196,7 @@ class _MyHomePageState extends State<MyHomePage> {
   String ivString = ''; // Must be 16 characters
   int remainingTodispenseAm = 0;
   String? _macAddress;
+  String trxidinject = '';
 
   String getFormattedDateTime() {
     final now = DateTime.now();
@@ -195,9 +205,10 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> _getMacAddress() async {
+
     final info = NetworkInfo();
     String? mac = await info.getWifiBSSID(); // Gets the BSSID (MAC of the connected router)
-
+    print('Mac Address : $mac');
     setState(() {
       _macAddress = mac ?? "Unknown";
     });
@@ -640,12 +651,11 @@ class _MyHomePageState extends State<MyHomePage> {
     List<Map<String, dynamic>> tempCoinPriceList = List.from(coinPriceList);
     List<Map<String, dynamic>> tempCoinPriceListBonus = List.from(coinPriceListBonus);
 
-
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setStateDialog) { // Local setState inside modal
+          builder: (context, setStateDialog) {
             return AlertDialog(
               title: Text('Coins & Prices List'),
               content: SingleChildScrollView(
@@ -655,13 +665,13 @@ class _MyHomePageState extends State<MyHomePage> {
                     _buildListSection(
                       title: 'Regular',
                       list: tempCoinPriceList,
-                      setState: setStateDialog, // Use modal's setState
+                      setState: setStateDialog,
                     ),
                     SizedBox(height: 20),
                     _buildListSection(
                       title: 'Bonus',
                       list: tempCoinPriceListBonus,
-                      setState: setStateDialog, // Use modal's setState
+                      setState: setStateDialog,
                       isBonus: true,
                     ),
                   ],
@@ -700,6 +710,14 @@ class _MyHomePageState extends State<MyHomePage> {
     required StateSetter setState,
     bool isBonus = false,
   }) {
+    // Declare controllers and FocusNodes outside the build method to persist their state
+    List<TextEditingController> coinsControllers = [];
+    List<TextEditingController> priceControllers = [];
+    List<TextEditingController?> bonusControllers = [];
+    List<FocusNode> coinsFocusNodes = [];
+    List<FocusNode> priceFocusNodes = [];
+    List<FocusNode?> bonusFocusNodes = [];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -715,12 +733,16 @@ class _MyHomePageState extends State<MyHomePage> {
         Column(
           mainAxisSize: MainAxisSize.min,
           children: List.generate(list.length, (index) {
-            // Use unique controllers per row
-            TextEditingController coinsController = TextEditingController(text: list[index]['coins'].toString());
-            TextEditingController priceController = TextEditingController(text: list[index]['price'].toString());
-            TextEditingController? bonusController = isBonus
-                ? TextEditingController(text: list[index]['bonus'].toString())
-                : null;
+            // Create controllers and FocusNodes only once to retain the state
+            if (coinsControllers.length <= index) {
+              coinsControllers.add(TextEditingController(text: list[index]['coins'].toString()));
+              priceControllers.add(TextEditingController(text: list[index]['price'].toString()));
+              bonusControllers.add(isBonus ? TextEditingController(text: list[index]['bonus'].toString()) : null);
+
+              coinsFocusNodes.add(FocusNode());
+              priceFocusNodes.add(FocusNode());
+              bonusFocusNodes.add(isBonus ? FocusNode() : null);
+            }
 
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -730,26 +752,38 @@ class _MyHomePageState extends State<MyHomePage> {
                     children: [
                       Expanded(
                         child: TextField(
-                          controller: coinsController,
+                          key: ValueKey('coins_$index'), // Unique Key to preserve state
+                          controller: coinsControllers[index],
+                          focusNode: coinsFocusNodes[index],
                           keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Restrict to digits only
                           decoration: InputDecoration(labelText: 'Coins'),
                           onChanged: (value) {
-                            setState(() {
-                              list[index]['coins'] = int.tryParse(value) ?? 0;
-                            });
+                            int parsedValue = int.tryParse(value) ?? 0;
+                            list[index]['coins'] = parsedValue;
+                          },
+                          onEditingComplete: () {
+                            // Move focus to the next field after completion
+                            FocusScope.of(context).requestFocus(priceFocusNodes[index]);
                           },
                         ),
                       ),
                       SizedBox(width: 10),
                       Expanded(
                         child: TextField(
-                          controller: priceController,
+                          key: ValueKey('price_$index'),
+                          controller: priceControllers[index],
+                          focusNode: priceFocusNodes[index],
                           keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                           decoration: InputDecoration(labelText: 'Price'),
                           onChanged: (value) {
-                            setState(() {
-                              list[index]['price'] = int.tryParse(value) ?? 0;
-                            });
+                            int parsedValue = int.tryParse(value) ?? 0;
+                            list[index]['price'] = parsedValue;
+                          },
+                          onEditingComplete: () {
+                            // Move focus to the next field after completion
+                            FocusScope.of(context).requestFocus(bonusFocusNodes[index] ?? coinsFocusNodes[index]);
                           },
                         ),
                       ),
@@ -758,23 +792,36 @@ class _MyHomePageState extends State<MyHomePage> {
                         onPressed: () {
                           setState(() {
                             list.removeAt(index);
+                            coinsControllers[index].dispose();
+                            priceControllers[index].dispose();
+                            bonusControllers[index]?.dispose();
+                            coinsControllers.removeAt(index);
+                            priceControllers.removeAt(index);
+                            bonusControllers.removeAt(index);
                           });
                         },
                       ),
                     ],
                   ),
-                  if (isBonus && bonusController != null) ...[
+                  if (isBonus && bonusControllers[index] != null) ...[
                     SizedBox(height: 10),
                     TextField(
-                      controller: bonusController,
+                      key: ValueKey('bonus_$index'), // Unique Key to preserve state
+                      controller: bonusControllers[index],
+                      focusNode: bonusFocusNodes[index],
                       keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Restrict to digits only
                       decoration: InputDecoration(labelText: 'Bonus'),
                       onChanged: (value) {
-                        setState(() {
-                          list[index]['bonus'] = int.tryParse(value) ?? 0; // Ensure 'bonus' is always an int
-                        });
+                        // Directly parse the value to an integer
+                        int parsedValue = int.tryParse(value) ?? 0;
+                        list[index]['bonus'] = parsedValue;
                       },
-                    ),
+                      onEditingComplete: () {
+                        // Move focus to the next field after completion
+                        FocusScope.of(context).requestFocus(coinsFocusNodes[index]);
+                      },
+                    )
                   ],
                 ],
               ),
@@ -786,10 +833,20 @@ class _MyHomePageState extends State<MyHomePage> {
           onPressed: () {
             setState(() {
               list.add({
-                'coins': 0 as int,
-                'price': 0 as int,
-                if (isBonus) 'bonus': 0 as int, // Explicitly cast bonus as int
+                'coins': 0,
+                'price': 0,
+                if (isBonus) 'bonus': 0,
               });
+              coinsControllers.add(TextEditingController(text: '0'));
+              priceControllers.add(TextEditingController(text: '0'));
+              if (isBonus) {
+                bonusControllers.add(TextEditingController(text: '0'));
+              } else {
+                bonusControllers.add(null);
+              }
+              coinsFocusNodes.add(FocusNode());
+              priceFocusNodes.add(FocusNode());
+              bonusFocusNodes.add(isBonus ? FocusNode() : null);
             });
           },
           child: Row(
@@ -800,6 +857,9 @@ class _MyHomePageState extends State<MyHomePage> {
       ],
     );
   }
+
+
+
 
 
   // Delete an item
@@ -1235,7 +1295,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
     mqttConn(); // call mqtt
     initConnectivity();
-    _getMacAddress();
+    Future.delayed(Duration(seconds: 5), () {
+      _getMacAddress();
+    });
 
 
 
@@ -1467,25 +1529,17 @@ class _MyHomePageState extends State<MyHomePage> {
 
      final injectpayloadresponse =
      {
-       "commandcode": "SetTransactionEWalletV2",
+       "commandcode": "DI_SetTransactionInjectCredit",
        "devicecode": deviceCode,
-       "data": [{
-         "statusstarttime": getFormattedDateTime(),
-         "status": "Inject",
-         "eutdcounter": UTDQR,
-         "eamount": injectAmountstr,
-         "qrcode": "",
-         "ewallettransactionid": "64E833476D881728298275",
-         "ewallettypecode": "DUITNOW",
-         "numberofinquiry": "0",
-         "duration": "0/175",
-         "errorcode": "11",
-         "errormessage": "NO ITEM DISPENSE",
-         "ewallettestusercode": "",
-         "slot": "1",
-         "responsetime": "2",
-         "rssi": "-99"
-       }
+       "data": [
+         {
+           "statusstarttime": getFormattedDateTime(),
+           "utdremotepaycounter": UTDQR,
+           "remotepayamount": injectamt,
+           "transactionid": trxidinject,
+           "responsetime": "1",
+           "rssi": "-50"
+         }
        ]
      };
 
@@ -1499,8 +1553,8 @@ class _MyHomePageState extends State<MyHomePage> {
        Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
        String token = parsedJson['data'][0]['token'];
 
-       print('request token success');
-       final responseSetinjectTrx =   http.post(
+       print('request token success $token');
+       final responseSetinjectTrx = await  http.post(
          Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
          headers: {
            'Content-Type': 'application/json',
@@ -1509,8 +1563,8 @@ class _MyHomePageState extends State<MyHomePage> {
          },
          body: json.encode(injectpayloadresponse),
        );
-
-
+       print('payload inject $injectpayloadresponse');
+       print('response inject ${responseSetinjectTrx.body}');
      }
 
 
@@ -1626,8 +1680,13 @@ class _MyHomePageState extends State<MyHomePage> {
             }
 
             if(item['commandcode'] == 'SetInjectCredit')
-              {const List<int> validAmounts = [100, 200,300,400,500,600,700,800,900, 1000];
+              {
+                const List<int> validAmounts = [100, 200,300,400,500,600,700,800,900, 1000];
                 print('data inject : $data');
+
+                setState(() {
+                  trxidinject = data['transactionid'];
+                });
 
                 int injectamount = int.tryParse(data['amount'].toString()) ?? 0;
 
@@ -1700,7 +1759,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   @override
-  void dispose() {
+  void mqttdispose() {
     mqttService.disconnect();
 
   }
@@ -1982,7 +2041,7 @@ class _MyHomePageState extends State<MyHomePage> {
         };
 
         if (qrcode != null) {
-          final responseTRXEW = await http.post(
+          final responseTRXEW =  http.post(
             Uri.parse(apiUrl),
             headers: {
               'Content-Type': 'application/json',

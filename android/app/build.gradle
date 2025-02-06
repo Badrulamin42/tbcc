@@ -9,8 +9,8 @@ android {
     namespace = "com.example.tbcc"
     compileSdkVersion 34
     ndkVersion "27.0.12077973"
-    
-     java {
+
+    java {
         toolchain {
             languageVersion = JavaLanguageVersion.of(21) // Ensure Java 21 is used
         }
