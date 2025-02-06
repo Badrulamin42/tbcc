@@ -591,7 +591,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 TextField(
                   controller: secretKeyController,
                   decoration: InputDecoration(labelText: 'Secret Key'),
-                  // obscureText: true, // Hide key for security
+                  obscureText: true, // Hide key for security
                   onChanged: (value) {
                     setState(() {
                       secretKeyController.text = value;
