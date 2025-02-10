@@ -160,6 +160,7 @@ class LoadingOverlay {
 
 
 class _MyHomePageState extends State<MyHomePage> {
+  String apiUrl = 'https://transpireqr-api.transpire.com.my/API/Exchange';
   late TextEditingController _controller; // Text editing controller
   String selectedAmount = ''; // Store the selected amount as state
   int selectedAmountCoin = 0; // Store the selected amount as state
@@ -189,6 +190,7 @@ class _MyHomePageState extends State<MyHomePage> {
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
   List<Map<String, dynamic>> coinPriceList = [];
   List<Map<String, dynamic>> coinPriceListBonus = [];
+  List<Map<String, dynamic>> coinPriceListNonQr = [];
   String deviceCode = ""; // Replace with the actual device code
   String rssi = '-39';
 //set encryption obj
@@ -197,6 +199,9 @@ class _MyHomePageState extends State<MyHomePage> {
   int remainingTodispenseAm = 0;
   String? _macAddress;
   String trxidinject = '';
+  bool isLatestSoldout = false;
+  bool isLatestQR = false;
+  int latestCashValue = 0;
 
   String getFormattedDateTime() {
     final now = DateTime.now();
@@ -212,6 +217,13 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       _macAddress = mac ?? "Unknown";
     });
+  }
+
+  Future<void> saveSoldout(bool isQrPayment) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isLatestSoldout', true); // Mark as sold out
+    await prefs.setBool('isLatestQR', isQrPayment); // Store QR payment status
+
   }
 
   Future<void> saveFailedTrx(String trxid, String amount, String utdqr) async {
@@ -264,11 +276,21 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  // Method to set default values for coinPriceListNonQr
+  void _setDefaultCoinPriceListNonQr() {
+    setState(() {
+      coinPriceListNonQr = [
+        {'coins': 0, 'price': 0, 'bonus': 0, 'description': ''},
+      ];
+    });
+  }
+
   Future<void> _loadSavedText() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? savedText = prefs.getString('savedText');
     String? savedData = prefs.getString('coinPriceList');
     String? savedDataBonus = prefs.getString('coinPriceListBonus');
+    String? savedDataNonQr = prefs.getString('coinPriceListNonQr');
     String? savedDeviceCode = prefs.getString('DeviceCode');
     String? savedSecretKey = prefs.getString('SecretKey');
     String? savedIVString = prefs.getString('IVString');
@@ -276,7 +298,7 @@ class _MyHomePageState extends State<MyHomePage> {
     // Handle device code
     setState(() {
       deviceCode = savedDeviceCode ?? 'TQR000001';
-      secretKey = savedSecretKey ?? r'24D7EB69ACD0!@#$';
+      secretKey = savedSecretKey ?? r'C0F535771682!@#$';
       ivString = savedIVString ?? '0192006944061854';
     });
     print('test saved data');
@@ -322,6 +344,27 @@ class _MyHomePageState extends State<MyHomePage> {
       _setDefaultCoinPriceListBonus();  // Set default if data is missing
     }
 
+    if (savedDataNonQr != null && savedDataNonQr.isNotEmpty) {
+      try {
+        List<dynamic> decodedBonusList = jsonDecode(savedDataNonQr);
+        setState(() {
+          coinPriceListNonQr = decodedBonusList.map<Map<String, int>>((item) {
+            return {
+              'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
+              'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
+              'bonus': (item['bonus'] is int) ? item['bonus'] : int.tryParse(item['bonus'].toString()) ?? 0,
+              'description': (item['description'] is String) ? item['description'] : ''
+            };
+          }).toList();
+        });
+      } catch (e) {
+        print("Error parsing coinPriceListNonQr: $e");
+        _setDefaultCoinPriceListNonQr();  // Set default if error occurs
+      }
+    } else {
+      _setDefaultCoinPriceListNonQr();  // Set default if data is missing
+    }
+
     // Load or Set Default Text
     if (savedText == null || savedText.isEmpty) {
       savedText =
@@ -365,9 +408,22 @@ class _MyHomePageState extends State<MyHomePage> {
       };
     }).toList();
 
+    List<Map<String, dynamic>> cleanedCoinPriceListNonQr = coinPriceListNonQr.map((item) {
+      return {
+        'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
+        'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
+        'bonus': (item['bonus'] is int) ? item['bonus'] : int.tryParse(item['bonus'].toString()) ?? 0,
+        'description': (item['description'] is String) ? item['description'] : ''
+      };
+    }).toList();
+
     // Save as JSON string
     prefs.setString('coinPriceList', jsonEncode(cleanedCoinPriceList));
     prefs.setString('coinPriceListBonus', jsonEncode(cleanedCoinPriceListBonus));
+    prefs.setString('coinPriceListNonQr', jsonEncode(cleanedCoinPriceListNonQr));
+
+
+
   }
 
   Future<void> initConnectivity() async {
@@ -396,7 +452,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
     // Check if connected to Wi-Fi or mobile
     for (var connectivity in result) {
-      if (connectivity == ConnectivityResult.mobile || connectivity == ConnectivityResult.wifi) {
+      if (connectivity == ConnectivityResult.mobile ||
+          connectivity == ConnectivityResult.wifi ||
+          connectivity == ConnectivityResult.ethernet) { // Added Ethernet check
         // Perform an internet check (e.g., ping Google)
         try {
           final response = await InternetAddress.lookup('8.8.8.8').timeout(Duration(seconds: 5));
@@ -490,7 +548,7 @@ class _MyHomePageState extends State<MyHomePage> {
         return;
       }
 
-    String apiUrl = 'https://tqrdnqr-api.transpire.com.my/API/Exchange';
+
     final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
 
     final payloadtoken = {
@@ -501,7 +559,7 @@ class _MyHomePageState extends State<MyHomePage> {
         {"key": encryptedKey}
       ]
     };
-    // final response = await http.get(Uri.parse(apiUrl));
+
     final responsetoken = await http.post(
       Uri.parse(apiUrl),
       headers: {
@@ -536,7 +594,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
       print('request token success');
       final responseSetDeviceError =   http.post(
-        Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+        Uri.parse(apiUrl),
         headers: {
           'Content-Type': 'application/json',
           'Token': token,
@@ -560,8 +618,8 @@ class _MyHomePageState extends State<MyHomePage> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
 
     // Fetch latest values from SharedPreferences before opening the modal
-    String latestDeviceCode = prefs.getString('DeviceCode') ?? 'TQR000001';
-    String latestSecretKey = prefs.getString('SecretKey') ?? r'24D7EB69ACD0!@#$';
+    String latestDeviceCode = prefs.getString('DeviceCode') ?? 'MDBT90251';
+    String latestSecretKey = prefs.getString('SecretKey') ?? r'C0F535771682!@#$';
     String latestIVString = prefs.getString('IVString') ?? '0192006944061854';
 
     // Initialize controllers with updated values
@@ -650,6 +708,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void _showListModal(BuildContext context) {
     List<Map<String, dynamic>> tempCoinPriceList = List.from(coinPriceList);
     List<Map<String, dynamic>> tempCoinPriceListBonus = List.from(coinPriceListBonus);
+    List<Map<String, dynamic>> tempCoinPriceListNonQr = List.from(coinPriceListNonQr);
 
     showDialog(
       context: context,
@@ -658,10 +717,28 @@ class _MyHomePageState extends State<MyHomePage> {
           builder: (context, setStateDialog) {
             return AlertDialog(
               title: Text('Coins & Prices List'),
-              content: SingleChildScrollView(
-                child: Column(
+              content:
+
+              SingleChildScrollView(
+                child:
+
+                Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    RichText(
+                      text: TextSpan(
+                        style: TextStyle(fontSize: 16, color: Colors.black), // Default text style
+                        children: [
+                          TextSpan(text: 'The maximum number of coins that can be dispensed at once is '),
+                          TextSpan(
+                            text: '500',
+                            style: TextStyle(fontWeight: FontWeight.bold), // Bold style for "500"
+                          ),
+                          TextSpan(text: '.'), // Period after "500"
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 15), // Adds spacing
                     _buildListSection(
                       title: 'Regular',
                       list: tempCoinPriceList,
@@ -673,6 +750,13 @@ class _MyHomePageState extends State<MyHomePage> {
                       list: tempCoinPriceListBonus,
                       setState: setStateDialog,
                       isBonus: true,
+                    ),
+                    SizedBox(height: 20),
+                    _buildListSection(
+                      title: 'Cash',
+                      list: tempCoinPriceListNonQr,
+                      setState: setStateDialog,
+                      isCash: true,
                     ),
                   ],
                 ),
@@ -687,6 +771,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     setState(() {
                       coinPriceList = List.from(tempCoinPriceList);
                       coinPriceListBonus = List.from(tempCoinPriceListBonus);
+                      coinPriceListNonQr = List.from(tempCoinPriceListNonQr);
                     });
                     _saveData();
                     Navigator.pop(context);
@@ -709,14 +794,17 @@ class _MyHomePageState extends State<MyHomePage> {
     required List<Map<String, dynamic>> list,
     required StateSetter setState,
     bool isBonus = false,
+    bool isCash = false,
   }) {
     // Declare controllers and FocusNodes outside the build method to persist their state
     List<TextEditingController> coinsControllers = [];
     List<TextEditingController> priceControllers = [];
     List<TextEditingController?> bonusControllers = [];
+    List<TextEditingController?> desControllers = [];
     List<FocusNode> coinsFocusNodes = [];
     List<FocusNode> priceFocusNodes = [];
     List<FocusNode?> bonusFocusNodes = [];
+    List<FocusNode?> desFocusNodes = [];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -726,7 +814,7 @@ class _MyHomePageState extends State<MyHomePage> {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: isBonus ? Colors.green : Colors.black,
+            color: isBonus ? Colors.green : isCash ? Colors.orange : Colors.black,
           ),
         ),
         SizedBox(height: 10),
@@ -738,10 +826,12 @@ class _MyHomePageState extends State<MyHomePage> {
               coinsControllers.add(TextEditingController(text: list[index]['coins'].toString()));
               priceControllers.add(TextEditingController(text: list[index]['price'].toString()));
               bonusControllers.add(isBonus ? TextEditingController(text: list[index]['bonus'].toString()) : null);
+              desControllers.add(TextEditingController(text: list[index]['description']));
 
               coinsFocusNodes.add(FocusNode());
               priceFocusNodes.add(FocusNode());
               bonusFocusNodes.add(isBonus ? FocusNode() : null);
+              desFocusNodes.add(FocusNode());
             }
 
             return Padding(
@@ -823,6 +913,26 @@ class _MyHomePageState extends State<MyHomePage> {
                       },
                     )
                   ],
+                  if (isCash && desControllers[index] != null) ...[
+                    SizedBox(height: 10),
+                    TextField(
+                      key: ValueKey('description_$index'), // Unique Key to preserve state
+                      controller: desControllers[index],
+                      focusNode: desFocusNodes[index],
+                      keyboardType: TextInputType.text,
+
+                      decoration: InputDecoration(labelText: 'Description'),
+                      onChanged: (value) {
+                        // Directly parse the value to an integer
+
+                        list[index]['description'] = value;
+                      },
+                      onEditingComplete: () {
+                        // Move focus to the next field after completion
+                        FocusScope.of(context).requestFocus(coinsFocusNodes[index]);
+                      },
+                    )
+                  ],
                 ],
               ),
             );
@@ -895,122 +1005,244 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void setLatestFailedTrx() async {
     List transactions = await getFailedTrx();
-
-    if (transactions.isNotEmpty) {
-      Map<String, dynamic> firstTransaction = transactions[0];  // Get the first item
-      final frefid = firstTransaction['trxid'];
-      final famount = firstTransaction['amount'];
-      final futdqr = firstTransaction['utdqr'];
-
-      String apiUrl = 'https://tqrdnqr-api.transpire.com.my/API/Exchange';
-      final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
-
-      final payloadtoken = {
-        "commandcode": "RequestToken",
-        "devicecode": deviceCode,
-        "result": "false",
-        "data": [
-          {"key": encryptedKey}
-        ]
-      };
-      // final response = await http.get(Uri.parse(apiUrl));
-      final responsetoken = await http.post(
-        Uri.parse(apiUrl),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: json.encode(payloadtoken),
-      );
+    // only run after restarted
+if(isLatestSoldout){
+  print('recently soldout detected');
+  if(isLatestQR)
+    {
+      if (transactions.isNotEmpty) {
+        Map<String, dynamic> firstTransaction = transactions[0];  // Get the first item
+        final frefid = firstTransaction['trxid'];
+        final famount = firstTransaction['amount'];
+        final futdqr = firstTransaction['utdqr'];
 
 
+        final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
 
-      const int maxRetries = 15; // Maximum retries
+        final payloadtoken = {
+          "commandcode": "RequestToken",
+          "devicecode": deviceCode,
+          "result": "false",
+          "data": [
+            {"key": encryptedKey}
+          ]
+        };
+
+        final responsetoken = await http.post(
+          Uri.parse(apiUrl),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: json.encode(payloadtoken),
+        );
+
+
+
+        const int maxRetries = 30; // Maximum retries
+        int retries = 0;
+
+        // Retry until isCompleteDispense becomes true or retries exceed maxRetries
+        while (retries < maxRetries) {
+
+
+
+          print('test : ');
+          print(communication.isCompleteDispense);
+
+          if (communication.isCompleteDispense) {
+            final SuccessPaymentPayloadtrx = {
+              "commandcode": "DI_SetTransactionEWalletV2",
+              "devicecode": deviceCode,
+              "data": [
+                {
+                  "statusstarttime": getFormattedDateTime(),
+                  "status": "Success",
+                  "eutdcounter": communication.totalUtdQr,
+                  "eamount": famount,
+                  "qrcode": "",
+                  "ewallettransactionid": frefid,
+                  "ewallettypecode": "DUITNOW",
+                  "numberofinquiry": "0",
+                  "duration": "0/175",
+                  "errorcode": "0",
+                  "errormessage": "",
+                  "ewallettestusercode": "",
+                  "slot": "55",
+                  "responsetime": "1",
+                  "rssi": "114"
+                }
+              ]
+            };
+            // If isCompleteDispense becomes true, return 'Completed'
+            communication.isCompleteDispense = false; // Reset the flag for future operations
+            communication.isSoldOut = false; // Reset the flag for future operations
+            communication.isDispenseCash = false;
+            communication.isQr = false;
+
+
+            // fetch success api
+            if (responsetoken.statusCode == 200) {
+
+              Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
+              String token = parsedJson['data'][0]['token'];
+
+              final privateKeyPem = await loadPrivateKey();
+              String signature =
+              await generateSignature(
+                  jsonEncode(SuccessPaymentPayloadtrx), privateKeyPem);
+
+              final responseSuccessTRXEW = await http.post(
+                Uri.parse(apiUrl),
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Token': token,
+                  'Signature': signature
+                },
+                body: json.encode(SuccessPaymentPayloadtrx),
+              );
+
+              if (responseSuccessTRXEW.statusCode == 200) {
+                print('Transaction:Success sent successfully');
+              } else {
+                print(
+                    'Failed to success transaction. Status code: ${responseSuccessTRXEW
+                        .statusCode}');
+              }
+
+              await clearFailedTrx();
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('isLatestSoldout');
+              await prefs.remove('isLatestQR');
+              setState(() {
+                latestCashValue = 0;
+                isLatestQR = false;
+                isLatestSoldout = false;
+              });
+              return;
+            }
+          }
+          print('soldout returned');
+
+          // Wait for the specified interval before retrying
+          await Future.delayed(Duration(milliseconds: 2000));
+          retries++;
+
+        }
+
+
+      }
+    }
+
+    // latest cash trx
+    else {
+      const int maxRetries = 30; // Maximum retries
       int retries = 0;
 
       // Retry until isCompleteDispense becomes true or retries exceed maxRetries
       while (retries < maxRetries) {
-
-
-
-        print('test : ');
-        print(communication.isCompleteDispense);
-
         if (communication.isCompleteDispense) {
-          final SuccessPaymentPayloadtrx = {
-            "commandcode": "DI_SetTransactionEWalletV2",
+          final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
+
+          final payloadtoken = {
+            "commandcode": "RequestToken",
+            "devicecode": deviceCode,
+            "result": "false",
+            "data": [
+              {"key": encryptedKey}
+            ]
+          };
+          // final response = await http.get(Uri.parse(apiUrl));
+          final responsetoken = await http.post(
+            Uri.parse(apiUrl),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: json.encode(payloadtoken),
+          );
+
+          communication.isSoldOut = false; // Reset the flag for future operations
+          communication.isCompleteDispense = false; // Reset the flag for future operations
+          communication.isDispenseCash = false;
+          communication.isQr = false;
+
+          final setcashpayload = {
+            "commandcode": "SetTransactionCash",
             "devicecode": deviceCode,
             "data": [
               {
                 "statusstarttime": getFormattedDateTime(),
-                "status": "Success",
-                "eutdcounter": communication.totalUtdQr,
-                "eamount": famount,
-                "qrcode": "",
-                "ewallettransactionid": frefid,
-                "ewallettypecode": "DUITNOW",
-                "numberofinquiry": "0",
-                "duration": "0/175",
-                "errorcode": "0",
-                "errormessage": "",
-                "ewallettestusercode": "",
-                "slot": "55",
-                "responsetime": "1",
-                "rssi": "114"
+                "utdcounter": communication.UtdCash.toString(),
+                "cashcounter": communication.CashCounter.toString(),
+                "utdCoinTube": "0.00",
+                "coinTubeCounter": "0.00",
+                "utdCoinBox": "0.00",
+                "coinBoxCounter": "0.00",
+                "amount": (latestCashValue / 100).toString(),
+                "slot": "5",
+                "rssi": "-99"
               }
             ]
           };
-          // If isCompleteDispense becomes true, return 'Completed'
-          communication.isCompleteDispense = false; // Reset the flag for future operations
 
-          // fetch success api
+
+          final privateKeyPem = await loadPrivateKey();
+          String signature =
+          await generateSignature(jsonEncode(setcashpayload), privateKeyPem);
+
           if (responsetoken.statusCode == 200) {
-
+            final responseData = json.decode(responsetoken.body);
             Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
             String token = parsedJson['data'][0]['token'];
 
-            final privateKeyPem = await loadPrivateKey();
-            String signature =
-            await generateSignature(
-                jsonEncode(SuccessPaymentPayloadtrx), privateKeyPem);
-
-            final responseSuccessTRXEW = await http.post(
-              Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+            print('request token success');
+            final responseSetCashTrx =   http.post(
+              Uri.parse(apiUrl),
               headers: {
                 'Content-Type': 'application/json',
                 'Token': token,
                 'Signature': signature
               },
-              body: json.encode(SuccessPaymentPayloadtrx),
+              body: json.encode(setcashpayload),
             );
-
-            if (responseSuccessTRXEW.statusCode == 200) {
-              print('Transaction:Success sent successfully');
-            } else {
-              print(
-                  'Failed to success transaction. Status code: ${responseSuccessTRXEW
-                      .statusCode}');
-            }
-
-            await clearFailedTrx();
-            return;
           }
-        }
-          print('soldout returned');
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('isLatestSoldout');
+          await prefs.remove('isLatestQR');
+          await prefs.remove('latestCashValue');
 
-        // Wait for the specified interval before retrying
+          setState(() {
+            latestCashValue = 0;
+            isLatestQR = false;
+            isLatestSoldout = false;
+          });
+          print("transactions cash uploaded.");
+          return;
+        }
+        else {
+          print("No failed transactions found.");
+        }
+
         await Future.delayed(Duration(milliseconds: 2000));
         retries++;
+      }
 
-        }
 
 
     }
 
-    else {
-      print("No failed transactions found.");
-    }
+  // await clearFailedTrx();
+  // final prefs = await SharedPreferences.getInstance();
+  // await prefs.remove('isLatestSoldout');
+  // await prefs.remove('isLatestQR');
+  // return;
+}
+else{
+  print('here should be save the soldout and qr/cash');
+}
 
   }
+
+
   void InsertCash(String status, int UtdCash, int CashCounter, int cashValue_) async {
     print('insertcash being called');
     if(status == 'Dispensing')
@@ -1018,12 +1250,15 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
       ReceivedPayment = true;
       CompletedDispense = false;
+      latestCashValue = 0;
       });
     }
 
-    if(status == 'Completed')
+    if(status == 'Completed' && latestCashValue == 0)
       {
-        String apiUrl = 'https://tqrdnqr-api.transpire.com.my/API/Exchange';
+
+        communication.isDispenseCash = false;
+        communication.isCompleteDispense = false;
         final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
 
         final payloadtoken = {
@@ -1074,7 +1309,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
           print('request token success');
           final responseSetCashTrx =   http.post(
-            Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+            Uri.parse(apiUrl),
             headers: {
               'Content-Type': 'application/json',
               'Token': token,
@@ -1101,7 +1336,12 @@ class _MyHomePageState extends State<MyHomePage> {
       }
 
     if(status == 'Failed') {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('latestCashValue', communication.cashValue_); // Store cash value
+
       Devicefaulty();
+      saveSoldout(false);
+      communication.isDispenseCash = false;
       setState(() {
 
         ReceivedPayment = true;
@@ -1166,7 +1406,7 @@ class _MyHomePageState extends State<MyHomePage> {
     await generateSignature(jsonEncode(PaymentPayloadtrx), privateKeyPem);
     try {
       final responsePaymentTRXEW = await http.post(
-        Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+        Uri.parse(apiUrl),
         headers: {
           'Content-Type': 'application/json',
           'Token': Token,
@@ -1230,7 +1470,7 @@ class _MyHomePageState extends State<MyHomePage> {
        await generateSignature(jsonEncode(SuccessPaymentPayloadtrx), privateKeyPem);
        try {
          final responseSuccessTRXEW = await http.post(
-           Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+           Uri.parse(apiUrl),
            headers: {
              'Content-Type': 'application/json',
              'Token': Token,
@@ -1292,7 +1532,7 @@ class _MyHomePageState extends State<MyHomePage> {
       isLoadingboot = true;
     });
     print('initState called');
-
+    loadSoldoutStatus();
     mqttConn(); // call mqtt
     initConnectivity();
     Future.delayed(Duration(seconds: 5), () {
@@ -1313,7 +1553,12 @@ class _MyHomePageState extends State<MyHomePage> {
 
       // //testing
       // await saveFailedTrx("test123" , "10.00", "1000" );
-      // await clearFailedTrx();
+      await clearFailedTrx();
+
+      // final prefs = await SharedPreferences.getInstance();
+      // await prefs.remove('isLatestSoldout');
+      // await prefs.remove('isLatestQR');
+      // await prefs.remove('latestCashValue');
       print('test get trx failed ');
       List transactions = await getFailedTrx();  // Await the function call
       print(transactions);  // Print the result
@@ -1394,6 +1639,15 @@ class _MyHomePageState extends State<MyHomePage> {
 
     // print('ports: $ports' );
 }
+  Future<void> loadSoldoutStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    setState(() {
+      latestCashValue = prefs.getInt('latestCashValue') ?? 0;
+      isLatestSoldout = prefs.getBool('isLatestSoldout') ?? false;
+      isLatestQR = prefs.getBool('isLatestQR') ?? false;
+    });
+  }
 
   void ReconnectCom(arr) async {
     // setState(() {
@@ -1507,7 +1761,7 @@ class _MyHomePageState extends State<MyHomePage> {
        UTDQR = result!.utdQr.toString();
      });
 
-     String apiUrl = 'https://tqrdnqr-api.transpire.com.my/API/Exchange';
+
      final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
 
      final payloadtoken = {
@@ -1555,7 +1809,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
        print('request token success $token');
        final responseSetinjectTrx = await  http.post(
-         Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+         Uri.parse(apiUrl),
          headers: {
            'Content-Type': 'application/json',
            'Token': token,
@@ -1618,7 +1872,7 @@ class _MyHomePageState extends State<MyHomePage> {
             if(item['commandcode'] == 'SetPing'){
               String trxid = data['transactionid'];
 
-              String apiUrl = 'https://tqrdnqr-api.transpire.com.my/API/Exchange';
+
               final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
 
               final payloadtoken = {
@@ -1723,6 +1977,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 });
                 closingStatement();
                 setState(() {
+                  latestCashValue = 0;
                   ReceivedPayment = true; // Save the generated QR code URL
                 });
                 await clearFailedTrx();
@@ -1793,6 +2048,7 @@ class _MyHomePageState extends State<MyHomePage> {
         if(result.message == '1'){
           Devicefaulty();
           Errormsg = 'Token is out of Stock';
+          saveSoldout(true);
           // isMachineFaulty = true;
         }
         else{
@@ -1903,7 +2159,7 @@ class _MyHomePageState extends State<MyHomePage> {
       await generateSignature(jsonEncode(payloadcanceltrx), privateKeyPem);
       try {
         final responseTRXEW = await http.post(
-          Uri.parse('https://tqrdnqr-api.transpire.com.my/API/Exchange'),
+          Uri.parse(apiUrl),
           headers: {
             'Content-Type': 'application/json',
             'Token': Token,
@@ -1933,7 +2189,7 @@ class _MyHomePageState extends State<MyHomePage> {
     required Function setLoading,
   }) async {
     String referenceId = generateReferenceId();
-    String apiUrl = 'https://tqrdnqr-api.transpire.com.my/API/Exchange';
+
     print('qr started');
     try {
       setLoading(true);
@@ -2102,7 +2358,18 @@ class _MyHomePageState extends State<MyHomePage> {
             return Stack(
                 children: [
              AlertDialog(
-              title: Text(isPasswordFieldVisible ? 'Authentication' : 'Setting'),
+              title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(isPasswordFieldVisible ? 'Authentication' : 'Setting'),
+                IconButton(
+                  icon: Icon(Icons.close),
+                  onPressed: () {
+                    Navigator.pop(context); // Close the dialog
+                  },
+                ),
+              ],
+            ),
               content: isPasswordFieldVisible
                   ? TextField(
                 controller: passwordController,
@@ -2968,29 +3235,29 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ),
 
-          Positioned(
-            bottom: 20.0, // Adjust the position as needed
-            left: 0,
-            right: 0,
-            child: Center( // This will center the child within the Positioned widget
-              child:
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    "Powered by",
-                    style: TextStyle(fontSize: 24),
-                  ),
-                  Image.asset(
-                    'assets/images/logo-tb.png', // Replace with your image path
-                    width: 150.0, // Adjust the size of the image
-                    height: 60.0,
-                  ),
-
-                ],
-              ),
-            ),
-          ),
+          // Positioned(
+          //   bottom: 20.0, // Adjust the position as needed
+          //   left: 0,
+          //   right: 0,
+          //   child: Center( // This will center the child within the Positioned widget
+          //     child:
+          //     Column(
+          //       mainAxisAlignment: MainAxisAlignment.center,
+          //       children: [
+          //         Text(
+          //           "Powered by",
+          //           style: TextStyle(fontSize: 24),
+          //         ),
+          //         Image.asset(
+          //           'assets/images/logo-tb.png', // Replace with your image path
+          //           width: 150.0, // Adjust the size of the image
+          //           height: 60.0,
+          //         ),
+          //
+          //       ],
+          //     ),
+          //   ),
+          // ),
 
 
           Stack(
@@ -3077,8 +3344,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                       const SizedBox(height: 16), // Space between the progress indicator and text
                       if(CompletedDispense == false && FailedDispense == false)
-                      const Text(
-                        'Please wait, Dispensing token...',
+                       Text(
+                        'Please wait, Dispensing token... \nRemaining Token : $remainingTodispenseAm',
                         style: TextStyle(
                           color: Colors.black,
                           fontSize: 16,
@@ -3190,40 +3457,37 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             ),
 
-          if (isDeviceFaulty)
+          if (isLatestSoldout)
 
             Container(
-              color:
-              Colors.black.withOpacity(0.5), // Semi-transparent background
+              color: Colors.black.withOpacity(0.5), // Semi-transparent background
               child: Center(
                 child: Container(
-                  padding:
-                  const EdgeInsets.all(20), // Add padding inside the box
+                  padding: const EdgeInsets.all(20), // Padding inside the box
                   decoration: BoxDecoration(
-                    color: Colors.white, // White background for the box
+                    color: Colors.white, // White background
                     borderRadius: BorderRadius.circular(12), // Rounded corners
                   ),
                   child: Column(
-                    mainAxisSize: MainAxisSize
-                        .min, // Ensures the content takes minimum space
-                    crossAxisAlignment: CrossAxisAlignment
-                        .center, // Center the content horizontally
+                    mainAxisSize: MainAxisSize.min, // Minimum space taken
+                    crossAxisAlignment: CrossAxisAlignment.center, // Center content
                     children: [
                       Icon(
-                      Icons.cancel,
-                        color: Colors.red ,
+                        Icons.cancel,
+                        color: Colors.red,
                         size: 50, // Icon size
                       ),
-                      const SizedBox(
-                          height:
-                          16), // Space between the progress indicator and text
-                       Text(
-                        'Soldout! \n' 'Remaining Token : $remainingTodispenseAm'
-                            ,
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                      const SizedBox(height: 16), // Space between icon and text
+                      SizedBox(
+                        width: 250, // Forces text to take full width
+                        child: Text(
+                          'Please wait, this could take around 3 minutes. \n Ensure the token is filled! \nRemaining Token : $remainingTodispenseAm',
+                          textAlign: TextAlign.center, // Ensure text is centered
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -3231,6 +3495,46 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
               ),
             ),
+
+          if (isDeviceFaulty)
+
+            Container(
+              color: Colors.black.withOpacity(0.5), // Semi-transparent background
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(20), // Padding inside the box
+                  decoration: BoxDecoration(
+                    color: Colors.white, // White background
+                    borderRadius: BorderRadius.circular(12), // Rounded corners
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min, // Minimum space taken
+                    crossAxisAlignment: CrossAxisAlignment.center, // Center content
+                    children: [
+                      Icon(
+                        Icons.cancel,
+                        color: Colors.red,
+                        size: 50, // Icon size
+                      ),
+                      const SizedBox(height: 16), // Space between icon and text
+                      SizedBox(
+                        width: 250, // Forces text to take full width
+                        child: Text(
+                          'Soldout! \nRemaining Token : $remainingTodispenseAm',
+                          textAlign: TextAlign.center, // Ensure text is centered
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
         ],
       ),
     );

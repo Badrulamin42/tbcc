@@ -35,6 +35,7 @@ class Communication {
   int dispenseAmount = 0;
   int totalUtdQr= 0;
   int UtdCash = 0;
+  int CashCounter = 0;
   int cashValue_ = 0;
   bool isDispenseCash = false;
 
@@ -336,9 +337,12 @@ class Communication {
         print('Expected response received (soldout). Sending reply...');
         isSoldOut = true;
 
-        myHomePageKey.currentState?.setLatestFailedTrx();
+        if(isQr == false && isDispenseCash == false){
+          myHomePageKey.currentState?.setLatestFailedTrx();
+        }
 
-        if(isQr = false) {
+        if(isQr == false && isDispenseCash == true) {
+
           myHomePageKey.currentState?.InsertCash('Failed', 0, 0, 0);
         }
         // Send the reply message
@@ -424,7 +428,7 @@ class Communication {
       if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x19 && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x06
       ) {
         print("Dispensed, Cash UTD here.");
-
+        isDispenseCash = true;
 
         // Check if the response length is correct
         if (data.length == 28) {
@@ -457,15 +461,15 @@ class Communication {
           print("UTD Cash Counter: $UTDCASHCounter");
 
 
-            if(CASHDispenseCounter > 0 && UTDCASHDispenseCounter > 0 &&  CASHCounter > 0) {
+            if(CASHDispenseCounter > 0 && UTDCASHDispenseCounter > 0) {
               myHomePageKey.currentState?.InsertCash(
                   'Completed', UTDCASHCounter, CASHCounter,
                   CASHDispenseCounter);
+              isCompleteDispense = true;
 
-              isDispenseCash = false;
               print('cash dispense complete true');
 
-
+              CashCounter = CASHCounter;
               UtdCash = UTDCASHDispenseCounter;
             }
 
@@ -501,7 +505,7 @@ class Communication {
     await sendData(requestDispense);
 
 
-    const int maxRetries = 30; // Maximum retries
+    const int maxRetries = 60; // Maximum retries
     int retries = 0;
 
     // Retry until isCompleteDispense becomes true or retries exceed maxRetries
@@ -603,7 +607,7 @@ class Communication {
 
 
 
-    const int maxRetries = 10; // Maximum retries
+    const int maxRetries = 60; // Maximum retries
     int retries = 0;
 
     // Retry until isCompleteDispense becomes true or retries exceed maxRetries
@@ -672,24 +676,18 @@ class Communication {
     // Assign the random byte
     command[10] = randomByte;
 
-    // Set amount
-    if (dispenseAmount == 10) {
-      command[13] = 0x0A;
-    } else if (dispenseAmount == 20) {
-      command[13] = 0x14; // Set the 13th element to hexadecimal 0x14
-    } else if (dispenseAmount == 50) {
-      command[13] = 0x32; // Set the 13th element to hexadecimal 0x32
-    } else if (dispenseAmount == 100) {
-      command[13] = 0x64; // Set the 13th element to hexadecimal 0x64
-    } else {
-      if (dispenseAmount > 100) {
-        dispenseAmount = 0xFF; // Cap the value at 255 (0xFF)
-      }
+    command[13] = (dispenseAmount > 255) ? 0xFF : dispenseAmount;
 
-      // Set the 13th element based on the dispenseAmount
-      command[13] = dispenseAmount;
+    var secondnumberdis = 0;
+
+    if(dispenseAmount > 255) {
+      secondnumberdis = dispenseAmount - 255;
+    }
+    else{
+      secondnumberdis = 0;
     }
 
+    command[14] = (secondnumberdis > 255) ? 0xFF : secondnumberdis ;
     print('dispense amount $dispenseAmount');
 
     // Recalculate checksum using XOR from index 1 to index 14 (excluding the checksum byte)
