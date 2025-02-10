@@ -3045,7 +3045,7 @@ else{
             children: [
               if (isSpecialOffer) ...[
                 TextSpan(
-                  text: '🔥 Special Sale! 🔥\n QR Only! \n',
+                  text: '🔥 Special Sale! 🔥\n QR payment only! \n',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -3055,7 +3055,7 @@ else{
               ],
               if (isCashOffer) ...[
                 TextSpan(
-                  text: '🔥 Special Sale! 🔥\n Pay at the counter Only!\n',
+                  text: '🔥 Special Sale! 🔥\n Pay at the counter only!\n',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
