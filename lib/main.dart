@@ -1996,9 +1996,11 @@ else{
                 setState(() {
                   ClosingCall = true;
                 });
+                communication.isCompleteDispense = false; // beta
                 closingStatement();
                 setState(() {
                   latestCashValue = 0;
+                  CompletedDispense = false;
                   ReceivedPayment = true; // Save the generated QR code URL
                 });
                 await clearFailedTrx();
