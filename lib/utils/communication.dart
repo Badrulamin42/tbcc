@@ -676,18 +676,8 @@ class Communication {
     // Assign the random byte
     command[10] = randomByte;
 
-    command[13] = (dispenseAmount > 255) ? 0xFF : dispenseAmount;
-
-    var secondnumberdis = 0;
-
-    if(dispenseAmount > 255) {
-      secondnumberdis = dispenseAmount - 255;
-    }
-    else{
-      secondnumberdis = 0;
-    }
-
-    command[14] = (secondnumberdis > 255) ? 0xFF : secondnumberdis ;
+    command[13] = dispenseAmount & 0xFF;        // Extract lower 8 bits
+    command[14] = (dispenseAmount >> 8) & 0xFF; // Extract upper 8 bits
     print('dispense amount $dispenseAmount');
 
     // Recalculate checksum using XOR from index 1 to index 14 (excluding the checksum byte)
