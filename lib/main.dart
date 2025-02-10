@@ -223,6 +223,7 @@ class _MyHomePageState extends State<MyHomePage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isLatestSoldout', true); // Mark as sold out
     await prefs.setBool('isLatestQR', isQrPayment); // Store QR payment status
+    await prefs.setInt('remainingtoken', remainingTodispenseAm);
 
   }
 
@@ -280,7 +281,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void _setDefaultCoinPriceListNonQr() {
     setState(() {
       coinPriceListNonQr = [
-        {'coins': 0, 'price': 0, 'bonus': 0, 'description': ''},
+        {'coins': 0, 'price': 0, 'bonus': 0},
       ];
     });
   }
@@ -353,7 +354,7 @@ class _MyHomePageState extends State<MyHomePage> {
               'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
               'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
               'bonus': (item['bonus'] is int) ? item['bonus'] : int.tryParse(item['bonus'].toString()) ?? 0,
-              'description': (item['description'] is String) ? item['description'] : ''
+
             };
           }).toList();
         });
@@ -413,7 +414,7 @@ class _MyHomePageState extends State<MyHomePage> {
         'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
         'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
         'bonus': (item['bonus'] is int) ? item['bonus'] : int.tryParse(item['bonus'].toString()) ?? 0,
-        'description': (item['description'] is String) ? item['description'] : ''
+
       };
     }).toList();
 
@@ -738,6 +739,20 @@ class _MyHomePageState extends State<MyHomePage> {
                         ],
                       ),
                     ),
+                    RichText(
+                      text: TextSpan(
+                        style: TextStyle(fontSize: 16, color: Colors.black), // Default text style
+                        children: [
+                          TextSpan(text: 'Status Soldout : '),
+                          TextSpan(
+                            text: isLatestSoldout ? 'yes, Remaining token: $remainingTodispenseAm' : 'no',
+                            style: TextStyle(fontWeight: FontWeight.bold), // Bold style for "500"
+                          ),
+
+                          TextSpan(text: '.'), // Period after "500"
+                        ],
+                      ),
+                    ),
                     SizedBox(height: 15), // Adds spacing
                     _buildListSection(
                       title: 'Regular',
@@ -757,6 +772,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       list: tempCoinPriceListNonQr,
                       setState: setStateDialog,
                       isCash: true,
+                      isBonus: true,
                     ),
                   ],
                 ),
@@ -826,7 +842,7 @@ class _MyHomePageState extends State<MyHomePage> {
               coinsControllers.add(TextEditingController(text: list[index]['coins'].toString()));
               priceControllers.add(TextEditingController(text: list[index]['price'].toString()));
               bonusControllers.add(isBonus ? TextEditingController(text: list[index]['bonus'].toString()) : null);
-              desControllers.add(TextEditingController(text: list[index]['description']));
+
 
               coinsFocusNodes.add(FocusNode());
               priceFocusNodes.add(FocusNode());
@@ -913,26 +929,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       },
                     )
                   ],
-                  if (isCash && desControllers[index] != null) ...[
-                    SizedBox(height: 10),
-                    TextField(
-                      key: ValueKey('description_$index'), // Unique Key to preserve state
-                      controller: desControllers[index],
-                      focusNode: desFocusNodes[index],
-                      keyboardType: TextInputType.text,
 
-                      decoration: InputDecoration(labelText: 'Description'),
-                      onChanged: (value) {
-                        // Directly parse the value to an integer
-
-                        list[index]['description'] = value;
-                      },
-                      onEditingComplete: () {
-                        // Move focus to the next field after completion
-                        FocusScope.of(context).requestFocus(coinsFocusNodes[index]);
-                      },
-                    )
-                  ],
                 ],
               ),
             );
@@ -1007,6 +1004,7 @@ class _MyHomePageState extends State<MyHomePage> {
     List transactions = await getFailedTrx();
     // only run after restarted
 if(isLatestSoldout){
+
   print('recently soldout detected');
   if(isLatestQR)
     {
@@ -1114,6 +1112,7 @@ if(isLatestSoldout){
               await prefs.remove('isLatestSoldout');
               await prefs.remove('isLatestQR');
               setState(() {
+                remainingTodispenseAm = 0;
                 latestCashValue = 0;
                 isLatestQR = false;
                 isLatestSoldout = false;
@@ -1129,6 +1128,26 @@ if(isLatestSoldout){
 
         }
 
+
+      }
+      else{
+        await clearFailedTrx();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('isLatestSoldout');
+        await prefs.remove('isLatestQR');
+
+        communication.isCompleteDispense = false; // Reset the flag for future operations
+        communication.isSoldOut = false; // Reset the flag for future operations
+        communication.isDispenseCash = false;
+        communication.isQr = false;
+
+        setState(() {
+          remainingTodispenseAm = 0;
+          latestCashValue = 0;
+          isLatestQR = false;
+          isLatestSoldout = false;
+        });
+        return;
 
       }
     }
@@ -1211,6 +1230,7 @@ if(isLatestSoldout){
           await prefs.remove('latestCashValue');
 
           setState(() {
+            remainingTodispenseAm = 0;
             latestCashValue = 0;
             isLatestQR = false;
             isLatestSoldout = false;
@@ -1506,7 +1526,7 @@ else{
 
 
 
-    await Future.delayed(Duration(seconds: 1), () {
+    await Future.delayed(Duration(seconds: 2), () {
       setState(() {
         ReceivedPayment = false;
         CompletedDispense = false;
@@ -1646,6 +1666,7 @@ else{
       latestCashValue = prefs.getInt('latestCashValue') ?? 0;
       isLatestSoldout = prefs.getBool('isLatestSoldout') ?? false;
       isLatestQR = prefs.getBool('isLatestQR') ?? false;
+      remainingTodispenseAm = prefs.getInt('remainingtoken') ?? 0;
     });
   }
 
@@ -2831,15 +2852,15 @@ else{
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         child: Image.asset(
                           'assets/images/duitnowlogo.png', // Replace with your logo path
-                          height: 50, // Adjust logo height
-                          width: 50, // Adjust logo width
+                          height: 80, // Adjust logo height
+                          width: 80, // Adjust logo width
                           fit: BoxFit.contain, // Adjust image fit
                         ),
                       ),
                     ),
 
                     Positioned(
-                      top: 190, // Position it from the top
+                      top: 220, // Position it from the top
                       left: 0,
                       right: 0,
                       child: Padding(
@@ -3005,41 +3026,56 @@ else{
     required int coins,
     required String amount,
     required bool isSpecialOffer,
+    required bool isCashOffer,
+
     int? bonus, // Optional for special offers
   }) {
     return SizedBox(
-      width: isSpecialOffer ? 580 : 275, // Special offer takes double width
+      width: isSpecialOffer ? 580 : isCashOffer ? 725 : 275, // Special offer takes double width
       child: ElevatedButton(
         onPressed: () {
           setState(() {
             selectedAmount = amount;
             selectedAmountCoin = coins;
           });
-          handleButtonPress(
-            context: context,
-            amount: amount,
-            currency: 'MYR',
-            setLoading: (value) {
-              setState(() {
-                isLoading = value;
-              });
-            },
-          );
+          if(isCashOffer == false){
+            handleButtonPress(
+              context: context,
+              amount: amount,
+              currency: 'MYR',
+              setLoading: (value) {
+                setState(() {
+                  isLoading = value;
+                });
+              },
+            );
+          }
+
         },
         style: ElevatedButton.styleFrom(
           minimumSize: Size(275, 200),
-          backgroundColor: isSpecialOffer ? Color(0xFFD32F2F) : Color(0xFFFEE902),
+          backgroundColor: isSpecialOffer ? Color(0xFFD32F2F) : isCashOffer ? Color(0xFF4CAF50) : Color(0xFFFEE902),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          padding: EdgeInsets.all(isSpecialOffer ? 24 : 16), // More padding for special offer
+          padding: EdgeInsets.all(isSpecialOffer ? 24 : isCashOffer ? 24 : 16), // More padding for special offer
         ),
         child: Text.rich(
           TextSpan(
             children: [
               if (isSpecialOffer) ...[
                 TextSpan(
-                  text: '🔥 Special Sale! 🔥\n',
+                  text: '🔥 Special Sale! 🔥\n QR Only! \n',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+              if (isCashOffer) ...[
+                TextSpan(
+                  text: '🔥 Special Sale! 🔥\n Pay at the counter Only!\n',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -3053,7 +3089,7 @@ else{
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'Arial',
-                  color: isSpecialOffer ? Colors.white : Color(0xFF8F301E),
+                  color: isSpecialOffer ? Colors.white : isCashOffer ? Colors.white : Color(0xFF8F301E),
                 ),
               ),
               TextSpan(
@@ -3061,10 +3097,21 @@ else{
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.normal,
-                  color: isSpecialOffer ? Colors.white70 : Color(0xFF8F301E),
+                  color: isSpecialOffer ? Colors.white70 : isCashOffer ? Colors.white70 :Color(0xFF8F301E),
                 ),
               ),
               if (isSpecialOffer && bonus != null) ...[
+                TextSpan(
+                  text: '\n+ Bonus $bonus Coins 🎁',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.yellowAccent,
+                  ),
+                ),
+              ],
+
+              if (isCashOffer && bonus != null) ...[
                 TextSpan(
                   text: '\n+ Bonus $bonus Coins 🎁',
                   style: TextStyle(
@@ -3171,6 +3218,7 @@ else{
                             coins: item['coins'] ?? 0,
                             amount: amount,
                             isSpecialOffer: false,
+                            isCashOffer: false,
                           );
                         }).toList(),
 
@@ -3184,11 +3232,35 @@ else{
                             coins: item['coins'] ?? 0,
                             amount: amount,
                             isSpecialOffer: true, // Apply special offer style
+                            isCashOffer: false,
                             bonus: item['bonus'], // Pass the bonus value
                           );
                         }).toList(),
+
+
                       ],
                     )
+                  ),
+                  const SizedBox(
+                      height:
+                      15), // Add space between description and content below
+                  Center(
+                    child: Column(
+                      children: coinPriceListNonQr
+                          .where((item) => item['coins']! > 0 && item['price']! > 0)
+                          .map((item) {
+                        String amount = item['price']!.toStringAsFixed(2); // Ensure correct format
+
+                        return _buildCoinButton(
+                          context: context,
+                          coins: item['coins'] ?? 0,
+                          amount: amount,
+                          isSpecialOffer: false, // Apply special offer style
+                          isCashOffer: true,
+                          bonus: item['bonus'], // Pass the bonus value
+                        );
+                      }).toList(),
+                    ),
                   ),
                   const SizedBox(height: 100),
                   Align(
@@ -3479,7 +3551,7 @@ else{
                       ),
                       const SizedBox(height: 16), // Space between icon and text
                       SizedBox(
-                        width: 250, // Forces text to take full width
+                        width: 350, // Forces text to take full width
                         child: Text(
                           'Please wait, this could take around 3 minutes. \n Ensure the token is filled! \nRemaining Token : $remainingTodispenseAm',
                           textAlign: TextAlign.center, // Ensure text is centered

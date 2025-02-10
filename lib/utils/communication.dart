@@ -540,18 +540,7 @@ class Communication {
   // Main function to control the flow of communication
   Future<Result> main(int command) async {
     isQr = true;
-    int timing = 2000; // default for 10coin
 
-    // // Connect to the port once
-    // bool connected = await comm.connect();
-    // if (!connected) {
-    //   print('Failed to connect to the port.');
-    //   return 'Failed';
-    // }
-
-    // Start listening for responses in the background
-
-    // Define data to send
     Uint8List requestDispense = Uint8List.fromList([
       0xAA,
       0x0A,
@@ -566,29 +555,6 @@ class Communication {
       0xE4,
       0xD4,
       0xDD
-    ]);
-
-    // Define UTDQR
-    Uint8List UTDQR = Uint8List.fromList([
-      0xAA,
-      0x04,
-      0x02,
-      0xD1,
-      0x05,
-      0xD1,
-      0xDD,
-
-    ]);
-
-    Uint8List UTDCASH = Uint8List.fromList([
-      0xAA,
-      0x04,
-      0x01,
-      0xD1,
-      0x06,
-      0xD2,
-      0xDD,
-
     ]);
 
     // Send data based on command
@@ -676,18 +642,8 @@ class Communication {
     // Assign the random byte
     command[10] = randomByte;
 
-    command[13] = (dispenseAmount > 255) ? 0xFF : dispenseAmount;
-
-    var secondnumberdis = 0;
-
-    if(dispenseAmount > 255) {
-      secondnumberdis = dispenseAmount - 255;
-    }
-    else{
-      secondnumberdis = 0;
-    }
-
-    command[14] = (secondnumberdis > 255) ? 0xFF : secondnumberdis ;
+    command[13] = dispenseAmount & 0xFF;        // Extract lower 8 bits
+    command[14] = (dispenseAmount >> 8) & 0xFF; // Extract upper 8 bits
     print('dispense amount $dispenseAmount');
 
     // Recalculate checksum using XOR from index 1 to index 14 (excluding the checksum byte)
