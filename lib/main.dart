@@ -390,6 +390,36 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  Future<void> _clearDataAndResetFlags(BuildContext context) async {
+    // Example: Clear SharedPreferences data.
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    await prefs.clear();
+
+    setState(() {
+      refId = '';
+      random = '';
+       trxidinject = '';
+       isLatestSoldout = false;
+       isLatestQR = false;
+       latestCashValue = 0;
+      ReceivedPayment = false;
+      CompletedDispense = false;
+      FailedDispense = false;
+      ClosingCall = false;
+      isMachineFaulty = false;
+      Token = '';
+      Signature = '';
+      Errormsg = '';
+      ErrormsgConn = '';
+      ErrormsgInitConn = '';
+    });
+
+
+    Navigator.of(context).pop();
+    exit(0);
+  }
+
   Future<void> _saveData() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -1131,7 +1161,7 @@ if(isLatestSoldout){
 
       }
       else{
-        await clearFailedTrx();
+
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('isLatestSoldout');
         await prefs.remove('isLatestQR');
@@ -1573,7 +1603,7 @@ else{
 
       // //testing
       // await saveFailedTrx("test123" , "10.00", "1000" );
-      await clearFailedTrx();
+      // await clearFailedTrx();
 
       // final prefs = await SharedPreferences.getInstance();
       // await prefs.remove('isLatestSoldout');
@@ -1582,24 +1612,7 @@ else{
       print('test get trx failed ');
       List transactions = await getFailedTrx();  // Await the function call
       print(transactions);  // Print the result
-      // try {
-      //   final ports = await SerialPort.availablePorts;
-      //   print('flutterserialport $ports');
-      //
-      //   final port = await SerialPort('/dev/ttyS3');
-      //   port.config = await SerialPortConfig()
-      //     ..baudRate = 38400
-      //     ..stopBits = 1
-      //     ..parity = SerialPortParity.none
-      //     ..bits = 8;
-      //   bool isOpened = await communication!.port.openReadWrite();
-      //   print('is open flutterserialport $isOpened');
-      // }
-      // catch(e){
-      //   print("Error opening serial port: $e");
-      // }
 
-          // Try opening the port
           try {
 
             communication = await Communication(null);  // Ensure async initialization
@@ -1652,12 +1665,6 @@ else{
     });
 
 
-    // final ports = SerialPort.availablePorts;
-    // setState(() {
-    //   myStringArray.addAll(ports); // Use addAll directly
-    // });
-
-    // print('ports: $ports' );
 }
   Future<void> loadSoldoutStatus() async {
     final prefs = await SharedPreferences.getInstance();
@@ -1668,12 +1675,13 @@ else{
       isLatestQR = prefs.getBool('isLatestQR') ?? false;
       remainingTodispenseAm = prefs.getInt('remainingtoken') ?? 0;
     });
+
+    print('islatestsoldout : $isLatestSoldout');
+    print('isLatestQr : $isLatestQR');
   }
 
   void ReconnectCom(arr) async {
-    // setState(() {
-    //   isLoadingboot = true;
-    // });
+
     LoadingOverlay.show(context);
     List<UsbDevice> devices = [];
     UsbDevice? _device;
@@ -1693,9 +1701,6 @@ else{
           print("Error opening port");
 
 
-          // setState(() {
-          //   ErrormsgInitConn = "Error opening port";
-          // });
           _showErrorDialog();
 
         }
@@ -1713,9 +1718,6 @@ else{
 
     }
 
-    // setState(() {
-    //   isLoadingboot = false;
-    // });
 
     LoadingOverlay.hide();
 
@@ -1881,14 +1883,8 @@ else{
         for (var item in parsedMessage) {
           if (item is Map<String, dynamic>) {
             // Extract required fields
-            // final commandCode = item['commandcode'] ?? 'Unknown';
-            // final result = item['result'] ?? 'Unknown';
             final data = item['data'] ?? {};
             print('mqtt item : $item');
-
-            // if(item['SetReboot']){
-            //
-            // }
 
             if(item['commandcode'] == 'SetPing'){
               String trxid = data['transactionid'];
@@ -1981,15 +1977,7 @@ else{
 
               }
 
-            // Access nested data fields
-            // final expiryTime = data['expirytime'] ?? 'Unknown';
-            // final amount = data['amount'] ?? 'Unknown';//
-
-
-
-
             final referenceId = data['referenceid'] ?? 'Unknown';
-
 
             if (referenceId == refId) {
               if (ClosingCall == false) {
@@ -2044,18 +2032,11 @@ else{
 
   //COM
 
-
   String status = 'Initializing...';
   late Communication communication;
-
   // Connect to the port once
 
-
-
-
   Future<bool> sendData(int command) async {
-
-
     Result? result = await communication.main(command);
 
     if(result.success == true) {
@@ -2083,8 +2064,6 @@ else{
       return false;
     }
   }
-
-
 
 
   String generateReferenceId() {
@@ -2330,7 +2309,6 @@ else{
           );
 
           final TRXEWResponseData = json.decode(response.body);
-
 
 
 
@@ -3553,9 +3531,12 @@ else{
                       ),
                       const SizedBox(height: 16), // Space between icon and text
                       SizedBox(
-                        width: 350, // Forces text to take full width
+                        width: 425, // Forces text to take full width
                         child: Text(
-                          'Please wait, this could take around 3 minutes. \n Ensure the token is filled! \nRemaining Token : $remainingTodispenseAm',
+                          'Please wait, this could take around 3 minutes\n '
+                              'to dispense the remaining token. \n'
+                              'Ensure the token is filled!'
+                              '\nRemaining Token : $remainingTodispenseAm',
                           textAlign: TextAlign.center, // Ensure text is centered
                           style: TextStyle(
                             color: Colors.black,
@@ -3563,6 +3544,23 @@ else{
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+
+                        // The button is centered by default since the Column is centered.
+
+                      ),
+                      Text(
+                        'If Nothing happens, click the Reset and Exit button',
+                        textAlign: TextAlign.center, // Ensure text is centered
+                        style: TextStyle(
+                          color: Colors.yellow,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16), // Space between icon and text
+                      ElevatedButton(
+                        onPressed: () => _clearDataAndResetFlags(context),
+                        child: const Text('Reset and Exit'),
                       ),
                     ],
                   ),
