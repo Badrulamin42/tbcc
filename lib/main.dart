@@ -192,6 +192,7 @@ class _MyHomePageState extends State<MyHomePage> {
   List<Map<String, dynamic>> coinPriceListBonus = [];
   List<Map<String, dynamic>> coinPriceListNonQr = [];
   String deviceCode = ""; // Replace with the actual device code
+  String machineId = ""; // Replace with the actual device code
   String rssi = '-39';
 //set encryption obj
   String secretKey = ''; // Must be 32 characters
@@ -292,14 +293,17 @@ class _MyHomePageState extends State<MyHomePage> {
     String? savedData = prefs.getString('coinPriceList');
     String? savedDataBonus = prefs.getString('coinPriceListBonus');
     String? savedDataNonQr = prefs.getString('coinPriceListNonQr');
+    String? savedMachineID = prefs.getString('MachineID');
     String? savedDeviceCode = prefs.getString('DeviceCode');
     String? savedSecretKey = prefs.getString('SecretKey');
     String? savedIVString = prefs.getString('IVString');
     List<dynamic> decodedBonusList = [];
     // Handle device code
+
     setState(() {
       deviceCode = savedDeviceCode ?? 'TQR000001';
-      secretKey = savedSecretKey ?? r'C0F535771682!@#$';
+      machineId = savedMachineID ?? 'A1';
+      secretKey = savedSecretKey ?? r'C0F535771682';
       ivString = savedIVString ?? '0192006944061854';
     });
     print('test saved data');
@@ -378,6 +382,8 @@ class _MyHomePageState extends State<MyHomePage> {
       _savedText = savedText!;
       _controller = TextEditingController(text: _savedText);
     });
+  // mqttdispose();
+  // mqttConn();
   }
 
 
@@ -649,11 +655,13 @@ class _MyHomePageState extends State<MyHomePage> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
 
     // Fetch latest values from SharedPreferences before opening the modal
+    String latestMachineId = prefs.getString('MachineID') ?? 'A1';
     String latestDeviceCode = prefs.getString('DeviceCode') ?? 'MDBT90251';
-    String latestSecretKey = prefs.getString('SecretKey') ?? r'C0F535771682!@#$';
+    String latestSecretKey = prefs.getString('SecretKey') ?? r'C0F535771682';
     String latestIVString = prefs.getString('IVString') ?? '0192006944061854';
 
     // Initialize controllers with updated values
+    TextEditingController machineIdController = TextEditingController(text: latestMachineId);
     TextEditingController deviceCodeController = TextEditingController(text: latestDeviceCode);
     TextEditingController secretKeyController = TextEditingController(text: latestSecretKey);
     TextEditingController ivStringController = TextEditingController(text: latestIVString);
@@ -667,6 +675,16 @@ class _MyHomePageState extends State<MyHomePage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                TextField(
+                  controller: machineIdController,
+                  decoration: InputDecoration(labelText: 'Machine ID'),
+                  onChanged: (value) {
+                    setState(() {
+                      machineIdController.text = value;
+                    });
+                  },
+                ),
+                SizedBox(height: 10),
                 TextField(
                   controller: deviceCodeController,
                   decoration: InputDecoration(labelText: 'Device Code'),
@@ -713,6 +731,7 @@ class _MyHomePageState extends State<MyHomePage> {
               onPressed: () async {
                 // Save the updated values to SharedPreferences
                 SharedPreferences prefs = await SharedPreferences.getInstance();
+                await prefs.setString('MachineID', machineIdController.text);
                 await prefs.setString('DeviceCode', deviceCodeController.text);
                 await prefs.setString('SecretKey', secretKeyController.text);
                 await prefs.setString('IVString', ivStringController.text);
@@ -2025,7 +2044,7 @@ else{
   }
 
   @override
-  void mqttdispose() {
+  void mqttdispose() async {
     mqttService.disconnect();
 
   }
@@ -2067,7 +2086,7 @@ else{
 
 
   String generateReferenceId() {
-    const prefix = "24D7EB69ACD0"; // Fixed prefix
+    var prefix = secretKey; // Fixed prefix
     String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
     return "$prefix$timestamp"; // Concatenate prefix and timestamp
   }
@@ -2093,6 +2112,7 @@ else{
 
   String encryptPlainText(
       String deviceCode, String secretKey, String ivString) {
+    secretKey = '$secretKey!@#\$';
 // Get the current UTC time, add 1 minute and format it
     final now = DateTime.now().toUtc().add(Duration(minutes: 1));
     final formattedTime =
@@ -3318,12 +3338,12 @@ else{
                   top: 20.0, // Adjust the position as needed
                   left: 100.0,
                   child: Opacity(
-                    opacity: 0.0, // Fully transparent but still interactive
-                    child: ElevatedButton(
+                    opacity: 0.75, // Fully transparent but still interactive
+                    child: TextButton(
                       onPressed: () {
                         handleAdminButtonClick(context);
                       },
-                      child: Text("Admin"),
+                      child: Text(machineId),
                     ),
                   ),
                 ),
