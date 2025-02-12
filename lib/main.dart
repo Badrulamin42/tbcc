@@ -1102,10 +1102,12 @@ if(isLatestSoldout){
               "devicecode": deviceCode,
               "data": [
                 {
+                  "machineid": machineId,
                   "statusstarttime": getFormattedDateTime(),
                   "status": "Success",
                   "eutdcounter": communication.totalUtdQr,
                   "eamount": famount,
+                  "eoriginalamount": famount,
                   "qrcode": "",
                   "ewallettransactionid": frefid,
                   "ewallettypecode": "DUITNOW",
@@ -1313,6 +1315,7 @@ else{
 
 
   void InsertCash(String status, int UtdCash, int CashCounter, int cashValue_) async {
+
     print('insertcash being called');
     if(status == 'Dispensing')
     {
@@ -1452,10 +1455,12 @@ else{
       "devicecode": deviceCode,
       "data": [
         {
+          "machineid": machineId,
           "statusstarttime": getFormattedDateTime(),
           "status": "Payment",
           "eutdcounter": UTDQR,
           "eamount": selectedAmount,
+          "eoriginalamount": selectedAmount,
           "qrcode": "",
           "ewallettransactionid": refId,
           "ewallettypecode": "DUITNOW",
@@ -1505,10 +1510,12 @@ else{
       "devicecode": deviceCode,
       "data": [
         {
+          "machineid": machineId,
           "statusstarttime": getFormattedDateTime(),
           "status": "Success",
           "eutdcounter": UTDQR,
           "eamount": selectedAmount,
+          "eoriginalamount": selectedAmount,
           "qrcode": "",
           "ewallettransactionid": refId,
           "ewallettypecode": "DUITNOW",
@@ -2157,7 +2164,7 @@ else{
         "data": [
           {
             "statusstarttime": getFormattedDateTime(),
-            "machineid": "W1",
+            "machineid": machineId,
             "status": "Payment",
             "eutdcounter": selectedAmount,
             "eamount": selectedAmount,
@@ -3338,7 +3345,7 @@ else{
                   top: 20.0, // Adjust the position as needed
                   left: 100.0,
                   child: Opacity(
-                    opacity: 0.75, // Fully transparent but still interactive
+                    opacity: 1, // Fully transparent but still interactive
                     child: TextButton(
                       onPressed: () {
                         handleAdminButtonClick(context);
