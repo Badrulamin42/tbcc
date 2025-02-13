@@ -741,9 +741,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 Navigator.pop(context);
 
                 // Optional: Show confirmation
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text("Settings Saved!"),
-                ));
+                _snackBar('Coins setting saved successfully');
               },
               child: Text('Save'),
             ),

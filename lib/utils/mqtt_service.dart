@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 import 'package:flutter/services.dart'; // For loading assets
@@ -39,7 +41,8 @@ class MqttService {
     client.keepAlivePeriod = 60;
     client.secure = true; // Enable secure connection (SSL/TLS)
     client.onDisconnected = onDisconnected;
-    client.autoReconnect = false;
+    client.autoReconnect = true;
+    client.resubscribeOnAutoReconnect = true;
 
     // Load the CA certificate (PEM file) if needed for validation
     try {
@@ -74,9 +77,23 @@ class MqttService {
     }
   }
 
-  // Handle the disconnect event
   void onDisconnected() {
-    // print('Disconnected from the MQTT broker.');
+    print('Disconnected from the MQTT broker.');
+    Future.delayed(Duration(seconds: 5), () {
+      connect(onMessageReceivedCallback: onMessageReceived); // Attempt to reconnect
+    });
+  }
+
+  void startConnectionChecker() {
+    Timer.periodic(Duration(minutes: 5), (timer) {
+      if (client.connectionStatus!.state != MqttConnectionState.connected) {
+        print("Connection lost! Reconnecting...");
+        connect(onMessageReceivedCallback: onMessageReceived);
+      }
+      else{
+        print("mqtt connection is stable");
+      }
+    });
   }
 
   // Subscribe to a specific topic
