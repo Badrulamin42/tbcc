@@ -43,6 +43,8 @@ class MqttService {
     client.onDisconnected = onDisconnected;
     client.autoReconnect = true;
     client.resubscribeOnAutoReconnect = true;
+    client.onConnected = onConnected;
+
 
     // Load the CA certificate (PEM file) if needed for validation
     try {
@@ -77,7 +79,13 @@ class MqttService {
     }
   }
 
+  void onConnected() {
+    myHomePageKey.currentState?.onMqttConnected();
+    print('MQTT Connected');
+  }
+
   void onDisconnected() {
+    myHomePageKey.currentState?.onMqttDisconnected();
     print('Disconnected from the MQTT broker.');
     Future.delayed(Duration(seconds: 5), () {
       connect(onMessageReceivedCallback: onMessageReceived); // Attempt to reconnect
@@ -94,6 +102,18 @@ class MqttService {
         print("mqtt connection is stable");
       }
     });
+  }
+
+  bool connectionChecker() {
+
+      if (client.connectionStatus!.state != MqttConnectionState.connected) {
+
+        return true;
+      }
+      else{
+        return false;
+      }
+
   }
 
   // Subscribe to a specific topic

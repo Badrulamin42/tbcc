@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:async';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'package:flutter_usb/flutter_usb.dart';
 import 'package:usb_serial/usb_serial.dart';
@@ -22,7 +23,7 @@ class Result {
   Result({required this.success, required this.message, required this.utdQr});
 }
 
-class Communication {
+class Communication  extends ChangeNotifier {
   UsbDevice? _device;
   UsbPort? _port;
   final String portName = Platform.isAndroid ? '/dev/ttyS3' : 'COM5';
@@ -46,25 +47,48 @@ class Communication {
   Communication(UsbDevice? testPort) {
 
     try {
-     findAndOpenDevice(testPort);
+    var open =  findAndOpenDevice(testPort);
 
 
     print('isconnected $isConnected');
 
-      Future.delayed(Duration(seconds: 3), () {
+      Future.delayed(Duration(seconds: 1), () {
         setupCommunication();
+        notifyListeners(); // Notify listeners on change
         print('isconnected2 $isConnected');
       });
 
-      Future.delayed(Duration(seconds: 5), () {
-        listenForResponse();
-      });
+      if(isConnected){
+        Future.delayed(Duration(seconds: 3), () {
+          listenForResponse();
+        });
+      }
+
     }
     catch(e){
       throw Exception(e);
     }
 
 
+  }
+  void updateConnectionStatus(bool status) {
+    isConnected = status;
+    notifyListeners(); // Notify listeners on change
+  }
+
+  // Monitor the connection status in real-time
+  void startConnectionMonitor() {
+    Timer.periodic(Duration(seconds: 2), (timer) {
+      bool status = checkConnection();
+      if (status != isConnected) {
+        updateConnectionStatus(status);
+      }
+    });
+  }
+
+  bool checkConnection() {
+    // Add your logic to check connection status
+    return _port != null;
   }
   Future<void> setupCommunication() async {
     if (_port != null) {
