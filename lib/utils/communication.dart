@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:async';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'package:flutter_usb/flutter_usb.dart';
 import 'package:usb_serial/usb_serial.dart';
@@ -23,7 +22,7 @@ class Result {
   Result({required this.success, required this.message, required this.utdQr});
 }
 
-class Communication  extends ChangeNotifier {
+class Communication {
   UsbDevice? _device;
   UsbPort? _port;
   final String portName = Platform.isAndroid ? '/dev/ttyS3' : 'COM5';
@@ -47,23 +46,19 @@ class Communication  extends ChangeNotifier {
   Communication(UsbDevice? testPort) {
 
     try {
-    var open =  findAndOpenDevice(testPort);
+      findAndOpenDevice(testPort);
 
 
-    print('isconnected $isConnected');
+      print('isconnected $isConnected');
 
-      Future.delayed(Duration(seconds: 1), () {
+      Future.delayed(Duration(seconds: 3), () {
         setupCommunication();
-        notifyListeners(); // Notify listeners on change
         print('isconnected2 $isConnected');
       });
 
-      if(isConnected){
-        Future.delayed(Duration(seconds: 3), () {
-          listenForResponse();
-        });
-      }
-
+      Future.delayed(Duration(seconds: 5), () {
+        listenForResponse();
+      });
     }
     catch(e){
       throw Exception(e);
@@ -71,32 +66,13 @@ class Communication  extends ChangeNotifier {
 
 
   }
-  void updateConnectionStatus(bool status) {
-    isConnected = status;
-    notifyListeners(); // Notify listeners on change
-  }
-
-  // Monitor the connection status in real-time
-  void startConnectionMonitor() {
-    Timer.periodic(Duration(seconds: 2), (timer) {
-      bool status = checkConnection();
-      if (status != isConnected) {
-        updateConnectionStatus(status);
-      }
-    });
-  }
-
-  bool checkConnection() {
-    // Add your logic to check connection status
-    return _port != null;
-  }
   Future<void> setupCommunication() async {
     if (_port != null) {
       await _port!.setPortParameters(
         38400, // Set the baud rate (e.g., 115200)
-       UsbPort.DATABITS_8,
+        UsbPort.DATABITS_8,
         UsbPort.STOPBITS_1,
-         UsbPort.PARITY_NONE,
+        UsbPort.PARITY_NONE,
       );
       print('Serial communication configured!');
     }
@@ -113,13 +89,13 @@ class Communication  extends ChangeNotifier {
         _device =
         // null as UsbDevice; //testing
         devices.firstWhere(
-            (device) =>
-             device.vid == 0x1A86 && device.pid == 0x7523,
+              (device) =>
+          device.vid == 0x1A86 && device.pid == 0x7523,
 
-        // device.vid == 0x1A86 && device.pid == 0x7523, // Vendor ID: 1a86, Product ID: 7523
-        orElse: () => throw Exception("USB Serial device not found!"),
+          // device.vid == 0x1A86 && device.pid == 0x7523, // Vendor ID: 1a86, Product ID: 7523
+          orElse: () => throw Exception("USB Serial device not found!"),
 
-      );
+        );
       } else{
         _device = init;
       }
@@ -127,7 +103,7 @@ class Communication  extends ChangeNotifier {
       if (_device == null) {
 
 
-       return false;
+        return false;
       }
     }
     catch(e){
@@ -161,7 +137,7 @@ class Communication  extends ChangeNotifier {
       }
     }
     catch(e){
-    throw Exception(e);
+      throw Exception(e);
     }
   }
 
@@ -194,7 +170,7 @@ class Communication  extends ChangeNotifier {
     // Define the expected request and the response
 
     Uint8List pollingPCB =
-        Uint8List.fromList([0xAA, 0x03, 0x02, 0x10, 0x11, 0xDD]);
+    Uint8List.fromList([0xAA, 0x03, 0x02, 0x10, 0x11, 0xDD]);
     Uint8List pcToPollingPCB = Uint8List.fromList([
       0xAA,
       0x24,
@@ -283,7 +259,7 @@ class Communication  extends ChangeNotifier {
     ]);
 
     Uint8List statusResponse =
-        Uint8List.fromList([0xAA, 0x03, 0x01, 0x14, 0x16, 0xDD]);
+    Uint8List.fromList([0xAA, 0x03, 0x01, 0x14, 0x16, 0xDD]);
 
     Uint8List ReqResponse = Uint8List.fromList([
       0xAA,
@@ -315,7 +291,7 @@ class Communication  extends ChangeNotifier {
       0xAA, 0x03, 0x01, 0x14, 0x16, 0xDD
     ]);
 
- 
+
 
     _port!.inputStream?.listen((Uint8List data) async {
       print('Raw data: $data'); // Prints the raw data bytes
@@ -425,25 +401,25 @@ class Communication  extends ChangeNotifier {
         // Check if the response length is correct
 
 
-          // Decode dynamic data
-          int QRDispenseCounter = data[14] |
-          (data[15] << 8);
+        // Decode dynamic data
+        int QRDispenseCounter = data[14] |
+        (data[15] << 8);
 
-          int UTDQRDispenseCounter = data[16] |
-          (data[17] << 8) |
-          (data[18] << 16) |
-          (data[19] << 24); // Correct byte order for little-endian
+        int UTDQRDispenseCounter = data[16] |
+        (data[17] << 8) |
+        (data[18] << 16) |
+        (data[19] << 24); // Correct byte order for little-endian
 
-          // Print decoded values
-          print("Qr Dispense Counter: $QRDispenseCounter");
-          print("UTD qr Dispense Counter: $UTDQRDispenseCounter");
+        // Print decoded values
+        print("Qr Dispense Counter: $QRDispenseCounter");
+        print("UTD qr Dispense Counter: $UTDQRDispenseCounter");
 
         totalUtdQr = UTDQRDispenseCounter;
 
-          if(QRDispenseCounter > 0)
-            {
-              isCompleteDispense = true;
-            }
+        if(QRDispenseCounter > 0)
+        {
+          isCompleteDispense = true;
+        }
 
 
       }
@@ -485,17 +461,17 @@ class Communication  extends ChangeNotifier {
           print("UTD Cash Counter: $UTDCASHCounter");
 
 
-            if(CASHDispenseCounter > 0 && UTDCASHDispenseCounter > 0) {
-              myHomePageKey.currentState?.InsertCash(
-                  'Completed', UTDCASHCounter, CASHCounter,
-                  CASHDispenseCounter);
-              isCompleteDispense = true;
+          if(CASHDispenseCounter > 0 && UTDCASHDispenseCounter > 0) {
+            myHomePageKey.currentState?.InsertCash(
+                'Completed', UTDCASHCounter, CASHCounter,
+                CASHDispenseCounter);
+            isCompleteDispense = true;
 
-              print('cash dispense complete true');
+            print('cash dispense complete true');
 
-              CashCounter = CASHCounter;
-              UtdCash = UTDCASHDispenseCounter;
-            }
+            CashCounter = CASHCounter;
+            UtdCash = UTDCASHDispenseCounter;
+          }
 
         } else {
           print("Invalid response length.");
@@ -582,14 +558,14 @@ class Communication  extends ChangeNotifier {
     ]);
 
     // Send data based on command
-      if(command > 0) {
-        dispenseAmount = command;
+    if(command > 0) {
+      dispenseAmount = command;
 
-        await sendData(requestDispense);
-      }
-      else{
-        print('Unknown command');
-      }
+      await sendData(requestDispense);
+    }
+    else{
+      print('Unknown command');
+    }
 
     // Optional: Disconnect after communication
     // await Future.delayed(Duration(milliseconds: timing)); // Adjust if needed
