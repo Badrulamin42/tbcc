@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   flutter_libserialport
   flutter_usb
+  open_file_linux
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

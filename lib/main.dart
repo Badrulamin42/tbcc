@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'dart:async';
@@ -13,6 +14,9 @@ import 'package:flutter/services.dart'
         Uint8List,
         rootBundle;
 import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:usb_serial/usb_serial.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -25,10 +29,12 @@ import 'utils/communication.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_usb/flutter_usb.dart';
+import 'package:open_file/open_file.dart';
 
 const String appTag = "com.example.tbcc";
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(MyApp());
 }
 
@@ -213,6 +219,9 @@ class _MyHomePageState extends State<MyHomePage> {
   int latestCashValue = 0;
   String Datetime = '';
   bool mqttConnected = false;
+  double _progress = 0.0;
+  bool _downloading = false;
+  String currentVersion = "";
 
   void onMqttConnected() {
     setState(() {
@@ -289,7 +298,7 @@ class _MyHomePageState extends State<MyHomePage> {
         {'coins': 20, 'price': 20},
         {'coins': 50, 'price': 50},
         {'coins': 100, 'price': 100},
-        {'coins': 200, 'price': 200},
+        // {'coins': 200, 'price': 200},
       ];
     });
   }
@@ -298,7 +307,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void _setDefaultCoinPriceListBonus() {
     setState(() {
       coinPriceListBonus = [
-        {'coins': 0, 'price': 0, 'bonus': 0},
+        {'coins': 200, 'price': 200, 'bonus': 0},
       ];
     });
   }
@@ -307,7 +316,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void _setDefaultCoinPriceListNonQr() {
     setState(() {
       coinPriceListNonQr = [
-        {'coins': 0, 'price': 0, 'bonus': 0},
+        {'coins': 200, 'price': 200, 'bonus': 0, 'desc': "FREE CARTON PEPSI"},
       ];
     });
   }
@@ -326,9 +335,9 @@ class _MyHomePageState extends State<MyHomePage> {
     // Handle device code
 
     setState(() {
-      deviceCode = savedDeviceCode ?? 'TQR000001';
-      machineId = savedMachineID ?? 'A1';
-      secretKey = savedSecretKey ?? r'C0F535771682';
+      deviceCode = savedDeviceCode ?? 'MDBT90252';
+      machineId = savedMachineID ?? 'A001';
+      secretKey = savedSecretKey ?? r'C0F535F549AB';
       ivString = savedIVString ?? '0192006944061854';
     });
     print('test saved data');
@@ -387,7 +396,7 @@ class _MyHomePageState extends State<MyHomePage> {
       try {
         List<dynamic> decodedBonusList = jsonDecode(savedDataNonQr);
         setState(() {
-          coinPriceListNonQr = decodedBonusList.map<Map<String, int>>((item) {
+          coinPriceListNonQr = decodedBonusList.map<Map<String, dynamic>>((item) {
             return {
               'coins': (item['coins'] is int)
                   ? item['coins']
@@ -398,6 +407,7 @@ class _MyHomePageState extends State<MyHomePage> {
               'bonus': (item['bonus'] is int)
                   ? item['bonus']
                   : int.tryParse(item['bonus'].toString()) ?? 0,
+              'desc': item['desc']?.toString() ?? '' // Ensure it's always a string
             };
           }).toList();
         });
@@ -432,6 +442,137 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       _savedText = text;
     });
+  }
+
+  Future<void> checkForUpdate(BuildContext context) async {
+    try {
+      final response = await http.get(Uri.parse("https://gist.githubusercontent.com/Badrulamin42/dff98113cb1738adeb26785cc4ec0558/raw/d6c473b4b121809019f7014080d1b8b222361eba/version.json"));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final latestVersion = data["version"];
+        final apkUrl = data["download_url"];
+
+        final packageInfo = await PackageInfo.fromPlatform();
+        String currentVersion = packageInfo.version;
+
+        if (latestVersion != currentVersion) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text("Update Available"),
+              content: Text("A new version ($latestVersion) is available. Update now?"),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: Text("Later")),
+                TextButton(onPressed: () {
+                  Navigator.pop(context);
+                  downloadAndInstallAPK(apkUrl);
+                }, child: Text("Update")),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print("Error checking update: $e");
+    }
+  }
+
+  Future<void> downloadAndInstallAPK(String apkUrl) async {
+    // Request permissions for Android 7
+    if (await Permission.storage.request().isDenied) {
+      print("Storage permission denied.");
+      return;
+    }
+    void Function(void Function())? setDialogState;
+    // Get download directory
+    Directory tempDir = await getTemporaryDirectory();
+    String savePath = "${tempDir.path}/app-release.apk";
+
+    setState(() {
+      _downloading = true;
+      _progress = 0.0;
+    });
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            setDialogState = setState; // Store the function reference
+            return AlertDialog(
+              title: Text("Downloading APK"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LinearProgressIndicator(value: _progress),
+                  SizedBox(height: 10),
+                  Text("${(_progress * 100).toStringAsFixed(0)}%"),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+
+    try {
+      Dio dio = Dio();
+      await dio.download(
+        "https://download1640.mediafire.com/jy0nr88l1zygsEjz_1rjWAsP8Nq58_rFKI4V0Ds4DvE7-A0AFUhOd7r6XQvD2VDdtKo0jyM6R_0FMb13ssSCjlSwh4fe880DRTxET0KHtoaRucObBlmQ1bZaa_OdGp3E1JTyLi-pTCV_nl2-2AqwVA7nBu-ijOm07cq1gnan584H/lci0o26702cn1i8/app-release.apk",
+        savePath,
+        onReceiveProgress: (received, total) {
+
+          if (total != -1) {
+            double newProgress = received / total;
+
+            // ✅ Update progress inside the existing dialog
+              print('progress : $newProgress');
+              setState(() {
+                _progress = newProgress;
+              });
+            if (setDialogState != null) {
+              setDialogState!(() {
+                _progress = newProgress;
+              });
+            }
+
+
+          }
+        },
+      );
+
+      // ✅ Close dialog after download is complete
+
+        Navigator.pop(context);
+
+
+      print("Download complete. File saved at: $savePath");
+
+      // ✅ Show a snackbar to notify the user
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Download Complete! Tap to install.")),
+      );
+
+      // ✅ Open APK file
+      OpenFile.open(savePath);
+
+    } catch (e) {
+      // ✅ Close dialog if an error occurs
+      if (context.mounted) {
+        Navigator.pop(context);
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Download Failed: $e"), backgroundColor: Colors.red),
+      );
+    } finally {
+      setState(() {
+        _downloading = false;
+      });
+    }
   }
 
   Future<void> _clearDataAndResetFlags(BuildContext context) async {
@@ -505,6 +646,7 @@ class _MyHomePageState extends State<MyHomePage> {
         'bonus': (item['bonus'] is int)
             ? item['bonus']
             : int.tryParse(item['bonus'].toString()) ?? 0,
+        'desc': item['desc']
       };
     }).toList();
 
@@ -697,9 +839,9 @@ class _MyHomePageState extends State<MyHomePage> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
 
     // Fetch latest values from SharedPreferences before opening the modal
-    String latestMachineId = prefs.getString('MachineID') ?? 'A1';
-    String latestDeviceCode = prefs.getString('DeviceCode') ?? 'MDBT90251';
-    String latestSecretKey = prefs.getString('SecretKey') ?? r'C0F535771682';
+    String latestMachineId = prefs.getString('MachineID') ?? 'A001';
+    String latestDeviceCode = prefs.getString('DeviceCode') ?? 'MDBT90252';
+    String latestSecretKey = prefs.getString('SecretKey') ?? r'C0F535F549AB';
     String latestIVString = prefs.getString('IVString') ?? '0192006944061854';
 
     // Initialize controllers with updated values
@@ -785,7 +927,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 Navigator.pop(context);
 
                 // Optional: Show confirmation
-                _snackBar('Coins setting saved successfully');
+                _snackBar('Device setting saved successfully');
               },
               child: Text('Save'),
             ),
@@ -888,11 +1030,12 @@ class _MyHomePageState extends State<MyHomePage> {
                       coinPriceList = List.from(tempCoinPriceList);
                       coinPriceListBonus = List.from(tempCoinPriceListBonus);
                       coinPriceListNonQr = List.from(tempCoinPriceListNonQr);
+
                     });
                     _saveData();
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text("Settings Saved!"),
+                      content: Text("Coins Setting Saved!"),
                     ));
                   },
                   child: Text('Save'),
@@ -950,6 +1093,8 @@ class _MyHomePageState extends State<MyHomePage> {
               bonusControllers.add(isBonus
                   ? TextEditingController(text: list[index]['bonus'].toString())
                   : null);
+              desControllers.add(
+                  TextEditingController(text: list[index]['desc'].toString()));
 
               coinsFocusNodes.add(FocusNode());
               priceFocusNodes.add(FocusNode());
@@ -1016,9 +1161,11 @@ class _MyHomePageState extends State<MyHomePage> {
                             coinsControllers[index].dispose();
                             priceControllers[index].dispose();
                             bonusControllers[index]?.dispose();
+                            desControllers[index]?.dispose();
                             coinsControllers.removeAt(index);
                             priceControllers.removeAt(index);
                             bonusControllers.removeAt(index);
+                            desControllers.removeAt(index);
                           });
                         },
                       ),
@@ -1044,10 +1191,34 @@ class _MyHomePageState extends State<MyHomePage> {
                       onEditingComplete: () {
                         // Move focus to the next field after completion
                         FocusScope.of(context)
-                            .requestFocus(coinsFocusNodes[index]);
+                            .requestFocus(bonusFocusNodes[index]);
                       },
                     )
                   ],
+
+                  if(isCash && isBonus)
+                    ...[
+                      SizedBox(height: 10),
+
+                      TextField(
+                        key: ValueKey(
+                            'desc_$index'), // Unique Key to preserve state
+                        controller: desControllers[index],
+                        onChanged: (value) {
+                          // Directly parse the value to an integer
+
+                          list[index]['desc'] = value;
+                        },
+                        maxLines:
+                        6, // Set to allow 5 lines of text (adjust as needed)
+                        decoration: InputDecoration(
+                          labelText: 'Enter Text',
+                          border: OutlineInputBorder(),
+                        ),
+
+
+                      )
+                    ],
                 ],
               ),
             );
@@ -1064,6 +1235,7 @@ class _MyHomePageState extends State<MyHomePage> {
               });
               coinsControllers.add(TextEditingController(text: '0'));
               priceControllers.add(TextEditingController(text: '0'));
+              desControllers.add(TextEditingController(text: ''));
               if (isBonus) {
                 bonusControllers.add(TextEditingController(text: '0'));
               } else {
@@ -1071,6 +1243,7 @@ class _MyHomePageState extends State<MyHomePage> {
               }
               coinsFocusNodes.add(FocusNode());
               priceFocusNodes.add(FocusNode());
+              desFocusNodes.add(FocusNode());
               bonusFocusNodes.add(isBonus ? FocusNode() : null);
             });
           },
@@ -1645,6 +1818,7 @@ class _MyHomePageState extends State<MyHomePage> {
     loadSoldoutStatus();
     mqttConn(); // call mqtt
     initConnectivity();
+
     Future.delayed(Duration(seconds: 5), () {
       _getMacAddress();
     });
@@ -1660,7 +1834,10 @@ class _MyHomePageState extends State<MyHomePage> {
       // //testing
       // await saveFailedTrx("test123" , "10.00", "1000" );
       // await clearFailedTrx();
-
+      final packageInfo = await PackageInfo.fromPlatform();
+      setState(() {
+        currentVersion = packageInfo.version;
+      });
       // final prefs = await SharedPreferences.getInstance();
       // await prefs.remove('isLatestSoldout');
       // await prefs.remove('isLatestQR');
@@ -2249,7 +2426,7 @@ class _MyHomePageState extends State<MyHomePage> {
           "data": [
             {
               "referenceid": referenceId,
-              "eamount": "1.00",
+              "eamount": selectedAmount,
               "validityduration": "120",
               "rssi": "-39"
             }
@@ -2540,34 +2717,39 @@ class _MyHomePageState extends State<MyHomePage> {
                                   ),
                                 ),
 
-                              //testing purpose only for auto reconnect mqtt
-                              // if (!isShowTextVar)
-                              //   Positioned(
-                              //     top: 260, // Position it 50 pixels from the top
-                              //     left: 0, // Align to the left
-                              //     right: 0, // Align to the right
-                              //     child: ElevatedButton(
-                              //       onPressed: () {
-                              //         // Port setting logic
-                              //         mqttdispose();
-                              //       },
-                              //       style: ElevatedButton.styleFrom(
-                              //         backgroundColor: Colors.blueAccent, // Set button background color
-                              //         minimumSize: Size(120, 50), // Set button size (width, height)
-                              //         shape: RoundedRectangleBorder(
-                              //           borderRadius: BorderRadius.circular(12), // Rounded corners
-                              //         ),
-                              //       ),
-                              //       child: Text(
-                              //         'Mqtt disconnect',
-                              //         style: TextStyle(
-                              //           color: Colors.white, // Text color
-                              //           fontSize: 16, // Text size
-                              //           fontWeight: FontWeight.bold, // Text weight
-                              //         ),
-                              //       ),
-                              //     ),
-                              //   ),
+                              if (!isShowTextVar)
+                                Positioned(
+                                  top:
+                                  260, // Position it 50 pixels from the top
+                                  left: 0, // Align to the left
+                                  right: 0, // Align to the right
+                                  child: ElevatedButton(
+                                    onPressed: () {
+                                      // Port setting logic
+                                      checkForUpdate(context);
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors
+                                          .blueAccent, // Set button background color
+                                      minimumSize: Size(120,
+                                          50), // Set button size (width, height)
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(
+                                            12), // Rounded corners
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Check Update',
+                                      style: TextStyle(
+                                        color: Colors.white, // Text color
+                                        fontSize: 16, // Text size
+                                        fontWeight:
+                                        FontWeight.bold, // Text weight
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
 
                               if (!isShowTextVar)
                                 Positioned(
@@ -2620,6 +2802,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                           labelText: 'Enter Text',
                                           border: OutlineInputBorder(),
                                         ),
+
                                       ),
                                       SizedBox(height: 20),
 
@@ -3120,6 +3303,7 @@ class _MyHomePageState extends State<MyHomePage> {
     required BuildContext context,
     required int coins,
     required String amount,
+    String? description,
     required bool isSpecialOffer,
     required bool isCashOffer,
     int? bonus, // Optional for special offers
@@ -3170,9 +3354,9 @@ class _MyHomePageState extends State<MyHomePage> {
             children: [
               if (isSpecialOffer) ...[
                 TextSpan(
-                  text: '🔥 Special Sale! 🔥\n QR payment only! \n',
+                  text: '🔥 Promotion! 🔥\n',
                   style: TextStyle(
-                    fontSize: 24,
+                    fontSize: 40,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
@@ -3180,9 +3364,9 @@ class _MyHomePageState extends State<MyHomePage> {
               ],
               if (isCashOffer) ...[
                 TextSpan(
-                  text: '🔥 Special Sale! 🔥\n Pay at the counter only!\n',
+                  text: '🔥 Promotion! 🔥\n Pay at the counter only!\n',
                   style: TextStyle(
-                    fontSize: 24,
+                    fontSize: 40,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
@@ -3191,7 +3375,7 @@ class _MyHomePageState extends State<MyHomePage> {
               TextSpan(
                 text: '$coins ',
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 50,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'Arial',
                   color: isSpecialOffer
@@ -3204,7 +3388,7 @@ class _MyHomePageState extends State<MyHomePage> {
               TextSpan(
                 text: 'Coins\nMYR $amount',
                 style: TextStyle(
-                  fontSize: 26,
+                  fontSize: 45,
                   fontWeight: FontWeight.normal,
                   color: isSpecialOffer
                       ? Colors.white70
@@ -3213,7 +3397,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           : Color(0xFF8F301E),
                 ),
               ),
-              if (isSpecialOffer && bonus != null) ...[
+              if (isSpecialOffer && bonus != null && bonus > 0) ...[
                 TextSpan(
                   text: '\n+ Bonus $bonus Coins 🎁',
                   style: TextStyle(
@@ -3223,11 +3407,21 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                 ),
               ],
-              if (isCashOffer && bonus != null) ...[
+              if (isCashOffer && bonus != null && bonus > 0) ...[
                 TextSpan(
                   text: '\n+ Bonus $bonus Coins 🎁',
                   style: TextStyle(
                     fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.yellowAccent,
+                  ),
+                ),
+              ],
+              if (isCashOffer) ...[
+                TextSpan(
+                  text: '\n$description',
+                  style: TextStyle(
+                    fontSize: 30,
                     fontWeight: FontWeight.bold,
                     color: Colors.yellowAccent,
                   ),
@@ -3267,13 +3461,13 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
           // Main Container covering the remaining screen height
           Positioned(
-            top: screenHeight * 0.4, // Start 40% from top to avoid overlap
+            top: screenHeight * 0.30, // Start 40% from top to avoid overlap
             left: 0,
             right: 0,
             child: Container(
               width: screenWidth,
               height:
-                  screenHeight * 0.6, // Adjusted to take the remaining space
+                  screenHeight * 0.7, // Adjusted to take the remaining space
               padding:
                   const EdgeInsets.all(15.0), // Padding inside the container
               margin: const EdgeInsets.all(1.0), // Margin around the container
@@ -3369,6 +3563,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           isSpecialOffer: false, // Apply special offer style
                           isCashOffer: true,
                           bonus: item['bonus'], // Pass the bonus value
+                          description: item['desc']
                         );
                       }).toList(),
                     ),
@@ -3452,7 +3647,20 @@ class _MyHomePageState extends State<MyHomePage> {
                     onPressed: () {
                       handleAdminButtonClick(context);
                     },
-                    child: Text(machineId),
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '$machineId ',
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black), // Bold text
+                          ),
+                          TextSpan(
+                            text: 'V$currentVersion',
+                            style: TextStyle(color: Colors.black), // Colored text
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
