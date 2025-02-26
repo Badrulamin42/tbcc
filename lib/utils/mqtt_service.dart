@@ -17,7 +17,7 @@ class MqttService {
   late String clientId;
   Function(String)? onMessageReceived; // Callback for handling messages
    String deviceCode;
-
+  Timer? _reconnectTimer;
   // Constructor with required named parameter
   MqttService({required this.deviceCode}) {
     clientId = 'flutter_${deviceCode.hashCode}_${DateTime.now().millisecondsSinceEpoch}';
@@ -87,21 +87,25 @@ class MqttService {
   void onDisconnected() {
     myHomePageKey.currentState?.onMqttDisconnected();
     print('Disconnected from the MQTT broker.');
+
     Future.delayed(Duration(seconds: 5), () {
-      connect(onMessageReceivedCallback: onMessageReceived); // Attempt to reconnect
+      connect(onMessageReceivedCallback: onMessageReceived);
     });
 
-    Timer.periodic(Duration(minutes: 1), (timer) {
-      if (client.connectionStatus!.state != MqttConnectionState.connected) {
+    // Cancel any existing timer before starting a new one
+    _reconnectTimer?.cancel();
+
+    _reconnectTimer = Timer.periodic(Duration(minutes: 1), (timer) {
+      if (client.connectionStatus?.state != MqttConnectionState.connected) {
         print("Connection lost! Reconnecting...");
         connect(onMessageReceivedCallback: onMessageReceived);
-      }
-      else{
-        print("mqtt connection is stable");
+      } else {
+        print("MQTT connection is stable");
+        timer.cancel(); // Stop the timer if connection is restored
+        _reconnectTimer = null;
       }
     });
   }
-
   void startConnectionChecker() {
     Timer.periodic(Duration(minutes: 5), (timer) {
       if (client.connectionStatus!.state != MqttConnectionState.connected) {

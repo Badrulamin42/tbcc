@@ -334,16 +334,24 @@ class Communication {
       // Compare received data to the expected response
 
       //Polling
-
-      if (_listEquals(data, pollingPCB)) {
+      if (_listEquals(data, aftersoldout)) {
+      await _port!.write(aftersoldoutres);
+      await Future.delayed(Duration(milliseconds: 200));
+      await _port!.write(aftersoldoutres2);
+      print(
+      'OUT >>>: ${aftersoldoutres.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      }
+      else if (_listEquals(data, pollingPCB)) {
         print('Expected response received (polling). Sending reply...');
 
         // Send the reply message
        await _port!.write(pcToPollingPCB);
+        print(
+            'OUT >>>: ${pcToPollingPCB.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
         await Future.delayed(Duration(milliseconds: 200));
         await _port!.write(aftersoldoutres2);
         print(
-            'OUT >>>: ${pcToPollingPCB.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+            'OUT >>>: ${aftersoldoutres2.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       }
 
       //status1
@@ -558,13 +566,7 @@ class Communication {
       ) {
         print("Accepted request receive ");
       }
-      else if (_listEquals(data, aftersoldout)) {
-        await _port!.write(aftersoldoutres);
-        await Future.delayed(Duration(milliseconds: 200));
-        await _port!.write(aftersoldoutres2);
-        print(
-            'OUT >>>: ${aftersoldoutres.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
-      }
+
 
       else if (_listEquals(data, aftersoldoutaccept2)) {
 

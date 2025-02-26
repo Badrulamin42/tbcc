@@ -225,6 +225,8 @@ class _MyHomePageState extends State<MyHomePage> {
   String currentVersion = "";
   String key = "";
   bool _antiSpamButton = false; // Flag to prevent spamming
+  Timer? _reconnectTimer;
+
   void onMqttConnected() {
     setState(() {
       mqttConnected = true;
@@ -464,17 +466,46 @@ class _MyHomePageState extends State<MyHomePage> {
       _savedText = text;
     });
   }
-
+  void toggleLoadingDialog(BuildContext context, bool isLoading) {
+    // Show the loading dialog first
+    if (isLoading == true) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) =>
+            AlertDialog(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  const Text("Loading..."),
+                ],
+              ),
+            ),
+      );
+    }
+    else  {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+    }
+  }
   Future<void> checkForUpdate(BuildContext context) async {
+
+
     setState(() {
       isGeneralLoading = true;
       _antiSpamButton = true; // Set flag to true
     });
+
+    toggleLoadingDialog(context, true);
     try {
       final response = await http.get(Uri.parse(
           "https://www.transpire.com.my/apk/halolopark/version.json"));
 
       if (response.statusCode == 200) {
+        toggleLoadingDialog(context, false);
         setState(() {
           isGeneralLoading = false;
         });
@@ -528,6 +559,7 @@ class _MyHomePageState extends State<MyHomePage> {
               })); // Ensure flag resets even if dialog is dismissed
         }
       } else {
+        toggleLoadingDialog(context, false);
         setState(() {
           isGeneralLoading = false;
         });
@@ -548,6 +580,7 @@ class _MyHomePageState extends State<MyHomePage> {
             })); // Ensure flag resets even if dialog is dismissed
       }
     } catch (e) {
+      toggleLoadingDialog(context, false);
       setState(() {
         isGeneralLoading = false;
       });
@@ -747,24 +780,27 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> initConnectivity() async {
-    late List<ConnectivityResult> result;
-    // Platform messages may fail, so we use a try/catch PlatformException.
-    try {
-      result = await _connectivity.checkConnectivity();
-    } on PlatformException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Couldn\'t check connectivity status: $e')),
-      );
-      return;
-    }
 
-    // If the widget was removed from the tree while the asynchronous platform
-    // message was in flight, discard the reply.
-    if (!mounted) {
-      return Future.value(null);
-    }
+       late List<ConnectivityResult> result;
+      // Platform messages may fail, so we use a try/catch PlatformException.
+      try {
+        result = await _connectivity.checkConnectivity();
+        print('internet : $result');
+      } on PlatformException catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Couldn\'t check connectivity status: $e')),
+        );
+        return;
+      }
 
-    return _updateConnectionStatus(result);
+      // If the widget was removed from the tree while the asynchronous platform
+      // message was in flight, discard the reply.
+      if (!mounted) {
+        return Future.value(null);
+      }
+
+      return _updateConnectionStatus(result);
+
   }
 
   Future<void> getKey() async {
@@ -846,6 +882,11 @@ class _MyHomePageState extends State<MyHomePage> {
           isConnected = hasInternet; // Update connection status
         });
       }
+      else{
+        setState(() {
+          isConnected = false; // Update connection status
+        });
+      }
       break; // No need to check further once internet is found
     }
   }
@@ -918,9 +959,9 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void Devicefaulty() async {
-    if (isDeviceFaulty == true) {
-      return;
-    }
+    // if (isDeviceFaulty == true) {
+    //   return;
+    // }
 
     final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
 
@@ -1966,8 +2007,10 @@ class _MyHomePageState extends State<MyHomePage> {
     loadSoldoutStatus();
     mqttConn(); // call mqtt
     initConnectivity();
-    Timer.periodic(Duration(seconds: 5), (timer) async {
-      await initConnectivity();
+    _reconnectTimer?.cancel();
+
+    _reconnectTimer = Timer.periodic(Duration(seconds: 5), (timer) {
+      initConnectivity();
     });
 
     Future.delayed(Duration(seconds: 3), () {
@@ -4010,46 +4053,46 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
           //general loading
-          if (isGeneralLoading)
-            Stack(
-              children: [
-                // Your main UI
-                Positioned.fill(
-                  child: Container(
-                    color: Colors.black
-                        .withOpacity(0.5), // Semi-transparent background
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            CircularProgressIndicator(
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.blue),
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Loading...',
-                              style: TextStyle(
-                                color: Colors.black,
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          // if (isGeneralLoading)
+          //   Stack(
+          //     children: [
+          //       // Your main UI
+          //       Positioned.fill(
+          //         child: Container(
+          //           color: Colors.black
+          //               .withOpacity(0.5), // Semi-transparent background
+          //           child: Center(
+          //             child: Container(
+          //               padding: const EdgeInsets.all(20),
+          //               decoration: BoxDecoration(
+          //                 color: Colors.white,
+          //                 borderRadius: BorderRadius.circular(12),
+          //               ),
+          //               child: Column(
+          //                 mainAxisSize: MainAxisSize.min,
+          //                 crossAxisAlignment: CrossAxisAlignment.center,
+          //                 children: [
+          //                   CircularProgressIndicator(
+          //                     valueColor:
+          //                         AlwaysStoppedAnimation<Color>(Colors.blue),
+          //                   ),
+          //                   const SizedBox(height: 16),
+          //                   const Text(
+          //                     'Loading...',
+          //                     style: TextStyle(
+          //                       color: Colors.black,
+          //                       fontSize: 32,
+          //                       fontWeight: FontWeight.bold,
+          //                     ),
+          //                   ),
+          //                 ],
+          //               ),
+          //             ),
+          //           ),
+          //         ),
+          //       ),
+          //     ],
+          //   ),
 
           if (isLoadingboot)
             Positioned.fill(
