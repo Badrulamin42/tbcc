@@ -40,7 +40,8 @@ void main() {
 
 final GlobalKey<_MyHomePageState> myHomePageKey =
     GlobalKey<_MyHomePageState>(); // Create the GlobalKey
-bool isLoading = false;
+bool isLoading = false; //qr
+bool isGeneralLoading = false;
 bool isLoadingboot = false;
 
 String port = '';
@@ -222,12 +223,15 @@ class _MyHomePageState extends State<MyHomePage> {
   double _progress = 0.0;
   bool _downloading = false;
   String currentVersion = "";
-
+  String key = "";
+  bool _antiSpamButton = false; // Flag to prevent spamming
   void onMqttConnected() {
     setState(() {
       mqttConnected = true;
     });
   }
+
+  late Stream<ConnectivityResult> _connectivityStream;
 
   void onMqttDisconnected() {
     setState(() {
@@ -321,6 +325,20 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  Future<void> antiSpamButton() async {
+    if (_antiSpamButton) return; // Prevent multiple triggers
+
+    setState(() {
+      _antiSpamButton = true; // Set flag to true
+    });
+
+    Future.delayed(
+        Duration(seconds: 1),
+        () => setState(() {
+              _antiSpamButton = false; // Set flag to true
+            })); // Reset flag after delay
+  }
+
   Future<void> _loadSavedText() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? savedText = prefs.getString('savedText');
@@ -335,9 +353,10 @@ class _MyHomePageState extends State<MyHomePage> {
     // Handle device code
 
     setState(() {
-      deviceCode = savedDeviceCode ?? 'MDBT90252';
+      deviceCode = savedDeviceCode ?? 'TQR000001';
       machineId = savedMachineID ?? 'A001';
-      secretKey = savedSecretKey ?? r'C0F535F549AB';
+      secretKey = savedSecretKey ?? r'C0F535771682';
+      //C0F535771682
       ivString = savedIVString ?? '0192006944061854';
     });
     print('test saved data');
@@ -396,7 +415,8 @@ class _MyHomePageState extends State<MyHomePage> {
       try {
         List<dynamic> decodedBonusList = jsonDecode(savedDataNonQr);
         setState(() {
-          coinPriceListNonQr = decodedBonusList.map<Map<String, dynamic>>((item) {
+          coinPriceListNonQr =
+              decodedBonusList.map<Map<String, dynamic>>((item) {
             return {
               'coins': (item['coins'] is int)
                   ? item['coins']
@@ -407,7 +427,8 @@ class _MyHomePageState extends State<MyHomePage> {
               'bonus': (item['bonus'] is int)
                   ? item['bonus']
                   : int.tryParse(item['bonus'].toString()) ?? 0,
-              'desc': item['desc']?.toString() ?? '' // Ensure it's always a string
+              'desc':
+                  item['desc']?.toString() ?? '' // Ensure it's always a string
             };
           }).toList();
         });
@@ -445,10 +466,18 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> checkForUpdate(BuildContext context) async {
+    setState(() {
+      isGeneralLoading = true;
+      _antiSpamButton = true; // Set flag to true
+    });
     try {
-      final response = await http.get(Uri.parse("https://gist.githubusercontent.com/Badrulamin42/dff98113cb1738adeb26785cc4ec0558/raw/d6c473b4b121809019f7014080d1b8b222361eba/version.json"));
+      final response = await http.get(Uri.parse(
+          "https://www.transpire.com.my/apk/halolopark/version.json"));
 
       if (response.statusCode == 200) {
+        setState(() {
+          isGeneralLoading = false;
+        });
         final data = jsonDecode(response.body);
         final latestVersion = data["version"];
         final apkUrl = data["download_url"];
@@ -459,22 +488,84 @@ class _MyHomePageState extends State<MyHomePage> {
         if (latestVersion != currentVersion) {
           showDialog(
             context: context,
+            barrierDismissible:
+                false, // Prevents closing the dialog when clicking outside
             builder: (context) => AlertDialog(
               title: Text("Update Available"),
-              content: Text("A new version ($latestVersion) is available. Update now?"),
+              content: Text(
+                  "A new version ($latestVersion) is available. Update now?"),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: Text("Later")),
-                TextButton(onPressed: () {
-                  Navigator.pop(context);
-                  downloadAndInstallAPK(apkUrl);
-                }, child: Text("Update")),
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text("Later")),
+                TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      downloadAndInstallAPK(apkUrl);
+                    },
+                    child: Text("Update")),
               ],
             ),
-          );
+          ).then((_) => setState(() {
+                _antiSpamButton = false; // Set flag to true
+              })); // Ensure flag resets even if dialog is dismissed
+        } else {
+          showDialog(
+            context: context,
+            barrierDismissible:
+                false, // Prevents closing the dialog when clicking outside
+            builder: (context) => AlertDialog(
+              title: Text("App is updated to latest version"),
+              content: Text("No update required."),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text("Okay")),
+              ],
+            ),
+          ).then((_) => setState(() {
+                _antiSpamButton = false; // Set flag to true
+              })); // Ensure flag resets even if dialog is dismissed
         }
+      } else {
+        setState(() {
+          isGeneralLoading = false;
+        });
+        showDialog(
+          context: context,
+          barrierDismissible:
+              false, // Prevents closing the dialog when clicking outside
+          builder: (context) => AlertDialog(
+            title: Text("Error checking update"),
+            content: Text("500."),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context), child: Text("Okay")),
+            ],
+          ),
+        ).then((_) => setState(() {
+              _antiSpamButton = false; // Set flag to true
+            })); // Ensure flag resets even if dialog is dismissed
       }
     } catch (e) {
-      print("Error checking update: $e");
+      setState(() {
+        isGeneralLoading = false;
+      });
+      showDialog(
+        context: context,
+        barrierDismissible:
+            false, // Prevents closing the dialog when clicking outside
+        builder: (context) => AlertDialog(
+          title: Text("Error 404"),
+          content: Text("Check your internet connection."),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context), child: Text("Okay")),
+          ],
+        ),
+      ).then((_) => setState(() {
+            _antiSpamButton = false; // Set flag to true
+          })); // Ensure flag resets even if dialog is dismissed
     }
   }
 
@@ -517,37 +608,32 @@ class _MyHomePageState extends State<MyHomePage> {
       },
     );
 
-
     try {
       Dio dio = Dio();
       await dio.download(
-        "https://download1640.mediafire.com/jy0nr88l1zygsEjz_1rjWAsP8Nq58_rFKI4V0Ds4DvE7-A0AFUhOd7r6XQvD2VDdtKo0jyM6R_0FMb13ssSCjlSwh4fe880DRTxET0KHtoaRucObBlmQ1bZaa_OdGp3E1JTyLi-pTCV_nl2-2AqwVA7nBu-ijOm07cq1gnan584H/lci0o26702cn1i8/app-release.apk",
+        apkUrl,
         savePath,
         onReceiveProgress: (received, total) {
-
           if (total != -1) {
             double newProgress = received / total;
 
             // ✅ Update progress inside the existing dialog
-              print('progress : $newProgress');
-              setState(() {
-                _progress = newProgress;
-              });
+            print('progress : $newProgress');
+            setState(() {
+              _progress = newProgress;
+            });
             if (setDialogState != null) {
               setDialogState!(() {
                 _progress = newProgress;
               });
             }
-
-
           }
         },
       );
 
       // ✅ Close dialog after download is complete
 
-        Navigator.pop(context);
-
+      Navigator.pop(context);
 
       print("Download complete. File saved at: $savePath");
 
@@ -558,7 +644,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
       // ✅ Open APK file
       OpenFile.open(savePath);
-
     } catch (e) {
       // ✅ Close dialog if an error occurs
       if (context.mounted) {
@@ -566,7 +651,8 @@ class _MyHomePageState extends State<MyHomePage> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Download Failed: $e"), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text("Download Failed: $e"), backgroundColor: Colors.red),
       );
     } finally {
       setState(() {
@@ -579,7 +665,9 @@ class _MyHomePageState extends State<MyHomePage> {
     // Example: Clear SharedPreferences data.
     final SharedPreferences prefs = await SharedPreferences.getInstance();
 
-    await prefs.clear();
+    await clearFailedTrx();
+    await prefs.remove('isLatestSoldout');
+    await prefs.remove('isLatestQR');
 
     setState(() {
       refId = '';
@@ -679,6 +767,61 @@ class _MyHomePageState extends State<MyHomePage> {
     return _updateConnectionStatus(result);
   }
 
+  Future<void> getKey() async {
+    final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
+    final payloadtoken = {
+      "commandcode": "RequestToken",
+      "devicecode": deviceCode,
+      "result": "false",
+      "data": [
+        {"key": encryptedKey}
+      ]
+    };
+
+    final responsetoken = await http.post(
+      Uri.parse(apiUrl),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: json.encode(payloadtoken),
+    );
+
+    if (responsetoken.statusCode == 200) {
+      Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
+      String token = parsedJson['data'][0]['token'];
+
+      final payloadkey = {
+        "commandcode": "GetKey",
+        "devicecode": deviceCode,
+        "result": "false",
+      };
+
+      final responsekey = await http.post(
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json', 'Token': token},
+        body: json.encode(payloadkey),
+      );
+      // String sanitizedResponse = responsetoken.body.replaceAll("\r", "").replaceAll("\n", "");
+      // Map<String, dynamic> parsedJson2 = jsonDecode(sanitizedResponse);
+
+      // ✅ Fix unescaped newlines before decoding
+      String sanitizedResponse =
+          responsekey.body.replaceAll("\r", "").replaceAll("\n", "\\n");
+
+// ✅ Decode the cleaned JSON
+      Map<String, dynamic> parsedJson2 = jsonDecode(sanitizedResponse);
+      // Map<String, dynamic> parsedJson2 =
+      // jsonDecode(responsekey.body);
+
+      String pkey =
+          parsedJson2['data'][0]['privatekey'].replaceAll("\\n", "\n");
+
+      setState(() {
+        key = pkey;
+      });
+    }
+  }
+
   Future<void> _updateConnectionStatus(List<ConnectivityResult> result) async {
     bool hasInternet = false;
 
@@ -768,6 +911,12 @@ class _MyHomePageState extends State<MyHomePage> {
     return result;
   }
 
+  void setSoldout() async {
+    setState(() {
+      isDeviceFaulty = true;
+    });
+  }
+
   void Devicefaulty() async {
     if (isDeviceFaulty == true) {
       return;
@@ -807,8 +956,7 @@ class _MyHomePageState extends State<MyHomePage> {
     };
 
     final privateKeyPem = await loadPrivateKey();
-    String signature =
-        await generateSignature(jsonEncode(setDeviceError), privateKeyPem);
+    String signature = await generateSignature(jsonEncode(setDeviceError), key);
 
     if (responsetoken.statusCode == 200) {
       final responseData = json.decode(responsetoken.body);
@@ -840,8 +988,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
     // Fetch latest values from SharedPreferences before opening the modal
     String latestMachineId = prefs.getString('MachineID') ?? 'A001';
-    String latestDeviceCode = prefs.getString('DeviceCode') ?? 'MDBT90252';
-    String latestSecretKey = prefs.getString('SecretKey') ?? r'C0F535F549AB';
+    String latestDeviceCode = prefs.getString('DeviceCode') ?? 'TQR000001';
+    String latestSecretKey = prefs.getString('SecretKey') ?? r'C0F535771682';
     String latestIVString = prefs.getString('IVString') ?? '0192006944061854';
 
     // Initialize controllers with updated values
@@ -856,6 +1004,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
     showDialog(
       context: context,
+      barrierDismissible:
+          false, // Prevents closing the dialog when clicking outside
       builder: (context) {
         return AlertDialog(
           title: Text('Device Configuration'),
@@ -947,6 +1097,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
     showDialog(
       context: context,
+      barrierDismissible:
+          false, // Prevents closing the dialog when clicking outside
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
@@ -1030,7 +1182,6 @@ class _MyHomePageState extends State<MyHomePage> {
                       coinPriceList = List.from(tempCoinPriceList);
                       coinPriceListBonus = List.from(tempCoinPriceListBonus);
                       coinPriceListNonQr = List.from(tempCoinPriceListNonQr);
-
                     });
                     _saveData();
                     Navigator.pop(context);
@@ -1195,30 +1346,25 @@ class _MyHomePageState extends State<MyHomePage> {
                       },
                     )
                   ],
+                  if (isCash && isBonus) ...[
+                    SizedBox(height: 10),
+                    TextField(
+                      key: ValueKey(
+                          'desc_$index'), // Unique Key to preserve state
+                      controller: desControllers[index],
+                      onChanged: (value) {
+                        // Directly parse the value to an integer
 
-                  if(isCash && isBonus)
-                    ...[
-                      SizedBox(height: 10),
-
-                      TextField(
-                        key: ValueKey(
-                            'desc_$index'), // Unique Key to preserve state
-                        controller: desControllers[index],
-                        onChanged: (value) {
-                          // Directly parse the value to an integer
-
-                          list[index]['desc'] = value;
-                        },
-                        maxLines:
-                        6, // Set to allow 5 lines of text (adjust as needed)
-                        decoration: InputDecoration(
-                          labelText: 'Enter Text',
-                          border: OutlineInputBorder(),
-                        ),
-
-
-                      )
-                    ],
+                        list[index]['desc'] = value;
+                      },
+                      maxLines:
+                          6, // Set to allow 5 lines of text (adjust as needed)
+                      decoration: InputDecoration(
+                        labelText: 'Enter Text',
+                        border: OutlineInputBorder(),
+                      ),
+                    )
+                  ],
                 ],
               ),
             );
@@ -1372,7 +1518,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
                 final privateKeyPem = await loadPrivateKey();
                 String signature = await generateSignature(
-                    jsonEncode(SuccessPaymentPayloadtrx), privateKeyPem);
+                    jsonEncode(SuccessPaymentPayloadtrx), key);
 
                 final responseSuccessTRXEW = await http.post(
                   Uri.parse(apiUrl),
@@ -1487,8 +1633,8 @@ class _MyHomePageState extends State<MyHomePage> {
             };
 
             final privateKeyPem = await loadPrivateKey();
-            String signature = await generateSignature(
-                jsonEncode(setcashpayload), privateKeyPem);
+            String signature =
+                await generateSignature(jsonEncode(setcashpayload), key);
 
             if (responsetoken.statusCode == 200) {
               final responseData = json.decode(responsetoken.body);
@@ -1592,7 +1738,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
       final privateKeyPem = await loadPrivateKey();
       String signature =
-          await generateSignature(jsonEncode(setcashpayload), privateKeyPem);
+          await generateSignature(jsonEncode(setcashpayload), key);
 
       if (responsetoken.statusCode == 200) {
         final responseData = json.decode(responsetoken.body);
@@ -1665,7 +1811,9 @@ class _MyHomePageState extends State<MyHomePage> {
       }
     }
     //submit trx payload
-
+    setState(() {
+      remainingTodispenseAm = amounttodis!;
+    });
     final PaymentPayloadtrx = {
       "commandcode": "DI_SetTransactionEWalletV2",
       "devicecode": deviceCode,
@@ -1693,7 +1841,7 @@ class _MyHomePageState extends State<MyHomePage> {
     };
     final privateKeyPem = await loadPrivateKey();
     String signature =
-        await generateSignature(jsonEncode(PaymentPayloadtrx), privateKeyPem);
+        await generateSignature(jsonEncode(PaymentPayloadtrx), key);
     try {
       final responsePaymentTRXEW = await http.post(
         Uri.parse(apiUrl),
@@ -1716,7 +1864,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     //success trx
-    print('before send success $UTDQR');
+    print('before send trx success $UTDQR');
 
     bool resultdis = await sendData(amounttodis!);
 
@@ -1754,8 +1902,8 @@ class _MyHomePageState extends State<MyHomePage> {
       });
 
       // fetch success api
-      String signature = await generateSignature(
-          jsonEncode(SuccessPaymentPayloadtrx), privateKeyPem);
+      String signature =
+          await generateSignature(jsonEncode(SuccessPaymentPayloadtrx), key);
       try {
         final responseSuccessTRXEW = await http.post(
           Uri.parse(apiUrl),
@@ -1818,9 +1966,13 @@ class _MyHomePageState extends State<MyHomePage> {
     loadSoldoutStatus();
     mqttConn(); // call mqtt
     initConnectivity();
+    Timer.periodic(Duration(seconds: 5), (timer) async {
+      await initConnectivity();
+    });
 
-    Future.delayed(Duration(seconds: 5), () {
+    Future.delayed(Duration(seconds: 3), () {
       _getMacAddress();
+      getKey();
     });
 
     _connectivitySubscription =
@@ -2037,10 +2189,10 @@ class _MyHomePageState extends State<MyHomePage> {
         ]
       };
 
-      final privateKeyPem = await loadPrivateKey();
+      // final privateKeyPem = await loadPrivateKey();
 
-      String signature = await generateSignature(
-          jsonEncode(injectpayloadresponse), privateKeyPem);
+      String signature =
+          await generateSignature(jsonEncode(injectpayloadresponse), key);
 
       if (responsetoken.statusCode == 200) {
         final responseData = json.decode(responsetoken.body);
@@ -2352,7 +2504,7 @@ class _MyHomePageState extends State<MyHomePage> {
         ]
       };
       String signature =
-          await generateSignature(jsonEncode(payloadcanceltrx), privateKeyPem);
+          await generateSignature(jsonEncode(payloadcanceltrx), key);
       try {
         final responseTRXEW = await http.post(
           Uri.parse(apiUrl),
@@ -2435,8 +2587,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
         final privateKeyPem = await loadPrivateKey();
 
-        String signature =
-            await generateSignature(jsonEncode(payload), privateKeyPem);
+        String signature = await generateSignature(jsonEncode(payload), key);
         print('request qr');
         final response = await http.post(
           Uri.parse(apiUrl),
@@ -2453,12 +2604,26 @@ class _MyHomePageState extends State<MyHomePage> {
         Map<String, dynamic> qrparsedJson = jsonDecode(response.body);
         String qrcode = qrparsedJson['data'][0]['qrcode'] ?? null;
         String refid = qrparsedJson['data'][0]['referenceid'] ?? null;
+        String result = qrparsedJson['result'];
+        String errormsg = '';
+        errormsg = qrparsedJson['data'][0]['errormessage'];
 
         setState(() {
           qrCodeImageUrl = qrcode; // Save the generated QR code URL
           qrCompanyname = extractCompanyName(qrcode);
         });
 
+        if (result == false && errormsg.isNotEmpty) {
+          setState(() {
+            Errormsg = errormsg;
+          });
+        } else {
+          {
+            setState(() {
+              Errormsg = '';
+            });
+          }
+        }
         setState(() {
           refId = refid; // Save the generated QR code URL
         });
@@ -2638,7 +2803,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                       ),
                                     ),
                                     child: Text(
-                                      'Port Connection',
+                                      'Port Connection (Testing)',
                                       style: TextStyle(
                                         color: Colors.white, // Text color
                                         fontSize: 16, // Text size
@@ -2720,13 +2885,15 @@ class _MyHomePageState extends State<MyHomePage> {
                               if (!isShowTextVar)
                                 Positioned(
                                   top:
-                                  260, // Position it 50 pixels from the top
+                                      260, // Position it 50 pixels from the top
                                   left: 0, // Align to the left
                                   right: 0, // Align to the right
                                   child: ElevatedButton(
-                                    onPressed: () {
+                                    onPressed: () async {
                                       // Port setting logic
-                                      checkForUpdate(context);
+                                      if (_antiSpamButton == false) {
+                                        checkForUpdate(context);
+                                      }
                                     },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors
@@ -2744,45 +2911,53 @@ class _MyHomePageState extends State<MyHomePage> {
                                         color: Colors.white, // Text color
                                         fontSize: 16, // Text size
                                         fontWeight:
-                                        FontWeight.bold, // Text weight
+                                            FontWeight.bold, // Text weight
                                       ),
                                     ),
                                   ),
                                 ),
 
-
                               if (!isShowTextVar)
                                 Positioned(
-                                  top: 320, // Position it 320 pixels from the top
+                                  top:
+                                      320, // Position it 320 pixels from the top
                                   left: 0, // Align to the left
                                   right: 0, // Align to the right
                                   child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 20.0), // Add horizontal padding
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal:
+                                            20.0), // Add horizontal padding
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          mqttConnected ? 'MQTT: Connected' : 'MQTT: Disconnected',
+                                          mqttConnected
+                                              ? 'MQTT: Connected'
+                                              : 'MQTT: Disconnected',
                                           style: TextStyle(
                                             fontSize: 14.0,
-                                            color: Colors.black.withOpacity(0.6),
+                                            color:
+                                                Colors.black.withOpacity(0.6),
                                           ),
                                         ),
-                                        SizedBox(height: 4.0), // Space between status texts
+                                        SizedBox(
+                                            height:
+                                                4.0), // Space between status texts
                                         Text(
                                           communication.isConnected
                                               ? 'Port: Connected'
                                               : 'Port: Disconnected',
                                           style: TextStyle(
                                             fontSize: 14.0,
-                                            color: Colors.black.withOpacity(0.6),
+                                            color:
+                                                Colors.black.withOpacity(0.6),
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
                                 ),
-
 
                               Positioned(
                                 top: 115, // Position it 50 pixels from the top
@@ -2802,7 +2977,6 @@ class _MyHomePageState extends State<MyHomePage> {
                                           labelText: 'Enter Text',
                                           border: OutlineInputBorder(),
                                         ),
-
                                       ),
                                       SizedBox(height: 20),
 
@@ -2938,6 +3112,8 @@ class _MyHomePageState extends State<MyHomePage> {
   void _reConnectDialog(BuildContext context) {
     showDialog(
       context: context,
+      barrierDismissible:
+          false, // Prevents closing the dialog when clicking outside
       builder: (context) {
         return AlertDialog(
           title: const Text(
@@ -3217,13 +3393,24 @@ class _MyHomePageState extends State<MyHomePage> {
                                         foregroundColor: const Color(
                                             0xFFE52561), // QR code color
                                       )
-                                    : Image.asset(
-                                        'assets/images/errorpage.png', // Replace with your image path
-                                        height:
-                                            525, // Adjust dynamically based on screen height
-                                        width:
-                                            500, // Center the image and set the width
-                                      ),
+                                    : Column(children: [
+                                        Image.asset(
+                                          'assets/images/errorpage.png', // Replace with your image path
+                                          height:
+                                              525, // Adjust dynamically based on screen height
+                                          width:
+                                              500, // Center the image and set the width
+                                        ),
+                                        Text(
+                                          Errormsg,
+                                          style: TextStyle(
+                                            color: const Color(0xFFE52561),
+                                            fontSize: 16.0,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ]),
                               ),
 
                               // Rectangle with "Scan code to pay"
@@ -3310,10 +3497,10 @@ class _MyHomePageState extends State<MyHomePage> {
   }) {
     return SizedBox(
       width: isSpecialOffer
-          ? 580
+          ? 620
           : isCashOffer
               ? 725
-              : 275, // Special offer takes double width
+              : 300, // Special offer takes double width
       child: ElevatedButton(
         onPressed: () {
           setState(() {
@@ -3469,7 +3656,7 @@ class _MyHomePageState extends State<MyHomePage> {
               height:
                   screenHeight * 0.7, // Adjusted to take the remaining space
               padding:
-                  const EdgeInsets.all(15.0), // Padding inside the container
+                  const EdgeInsets.all(10.0), // Padding inside the container
               margin: const EdgeInsets.all(1.0), // Margin around the container
               decoration: BoxDecoration(
                 color: Colors.white, // Background color
@@ -3557,14 +3744,13 @@ class _MyHomePageState extends State<MyHomePage> {
                             .toStringAsFixed(2); // Ensure correct format
 
                         return _buildCoinButton(
-                          context: context,
-                          coins: item['coins'] ?? 0,
-                          amount: amount,
-                          isSpecialOffer: false, // Apply special offer style
-                          isCashOffer: true,
-                          bonus: item['bonus'], // Pass the bonus value
-                          description: item['desc']
-                        );
+                            context: context,
+                            coins: item['coins'] ?? 0,
+                            amount: amount,
+                            isSpecialOffer: false, // Apply special offer style
+                            isCashOffer: true,
+                            bonus: item['bonus'], // Pass the bonus value
+                            description: item['desc']);
                       }).toList(),
                     ),
                   ),
@@ -3652,11 +3838,14 @@ class _MyHomePageState extends State<MyHomePage> {
                         children: [
                           TextSpan(
                             text: '$machineId ',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black), // Bold text
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black), // Bold text
                           ),
                           TextSpan(
                             text: 'V$currentVersion',
-                            style: TextStyle(color: Colors.black), // Colored text
+                            style:
+                                TextStyle(color: Colors.black), // Colored text
                           ),
                         ],
                       ),
@@ -3695,7 +3884,6 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                       ],
                     ),
-
                   ],
                 ),
               ),
@@ -3738,13 +3926,13 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                       const SizedBox(
                           height:
-                              16), // Space between the progress indicator and text
+                              32), // Space between the progress indicator and text
                       if (CompletedDispense == false && FailedDispense == false)
                         const Text(
                           'Payment Received',
                           style: TextStyle(
                             color: Colors.black,
-                            fontSize: 16,
+                            fontSize: 32,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -3756,7 +3944,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           'Please wait, Dispensing token... \nRemaining Token : $remainingTodispenseAm',
                           style: TextStyle(
                             color: Colors.black,
-                            fontSize: 16,
+                            fontSize: 32,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -3765,19 +3953,19 @@ class _MyHomePageState extends State<MyHomePage> {
                           'Completed! Thank You',
                           style: TextStyle(
                             color: Colors.black,
-                            fontSize: 16,
+                            fontSize: 32,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      if (CompletedDispense == false && FailedDispense == true)
-                        Text(
-                          'Dispensing Failed, ' + Errormsg,
-                          style: const TextStyle(
-                            color: Colors.black,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                      // if (CompletedDispense == false && FailedDispense == true)
+                      //   Text(
+                      //     'Dispensing Failed, ' + Errormsg,
+                      //     style: const TextStyle(
+                      //       color: Colors.black,
+                      //       fontSize: 32,
+                      //       fontWeight: FontWeight.bold,
+                      //     ),
+                      //   ),
                     ],
                   ),
                 ),
@@ -3812,7 +4000,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         'Please wait, generating QR code...',
                         style: TextStyle(
                           color: Colors.black,
-                          fontSize: 16,
+                          fontSize: 32,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -3820,6 +4008,47 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                 ),
               ),
+            ),
+          //general loading
+          if (isGeneralLoading)
+            Stack(
+              children: [
+                // Your main UI
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black
+                        .withOpacity(0.5), // Semi-transparent background
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.blue),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Loading...',
+                              style: TextStyle(
+                                color: Colors.black,
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
 
           if (isLoadingboot)
@@ -3853,7 +4082,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           'Please wait, Connecting port...',
                           style: TextStyle(
                             color: Colors.black,
-                            fontSize: 16,
+                            fontSize: 32,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -3887,17 +4116,16 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                       const SizedBox(height: 16), // Space between icon and text
                       SizedBox(
-                        width: 425, // Forces text to take full width
+                        width: 550, // Forces text to take full width
                         child: Text(
-                          'Please wait, this could take around 3 minutes\n '
-                          'to dispense the remaining token. \n'
+                          'Please wait,\n '
                           'Ensure the token is filled!'
                           '\nRemaining Token : $remainingTodispenseAm',
                           textAlign:
                               TextAlign.center, // Ensure text is centered
                           style: TextStyle(
                             color: Colors.black,
-                            fontSize: 16,
+                            fontSize: 32,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -3909,7 +4137,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         textAlign: TextAlign.center, // Ensure text is centered
                         style: TextStyle(
                           color: Colors.yellow,
-                          fontSize: 12,
+                          fontSize: 32,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -3924,7 +4152,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
 
-          if (isDeviceFaulty)
+          if (isDeviceFaulty || communication.isSoldOut)
             Container(
               color:
                   Colors.black.withOpacity(0.5), // Semi-transparent background
@@ -3947,14 +4175,14 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                       const SizedBox(height: 16), // Space between icon and text
                       SizedBox(
-                        width: 250, // Forces text to take full width
+                        width: 375, // Forces text to take full width
                         child: Text(
                           'Soldout! \nRemaining Token : $remainingTodispenseAm',
                           textAlign:
                               TextAlign.center, // Ensure text is centered
                           style: TextStyle(
                             color: Colors.black,
-                            fontSize: 16,
+                            fontSize: 32,
                             fontWeight: FontWeight.bold,
                           ),
                         ),

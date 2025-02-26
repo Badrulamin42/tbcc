@@ -38,7 +38,7 @@ class Communication {
   int CashCounter = 0;
   int cashValue_ = 0;
   bool isDispenseCash = false;
-
+  List<int> sentreqcommand = [];
 
 
 
@@ -156,7 +156,7 @@ class Communication {
     try {
       _port!.write(data);
       print(
-          'Data sent: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+          'OUT: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
     } catch (e) {
       print('Error sending data: $e');
     }
@@ -218,7 +218,7 @@ class Communication {
 
     Uint8List status1Request = Uint8List.fromList([
       0xAA,
-      0xF0,
+      0x0F,
       0x02,
       0x14,
       0x1A,
@@ -239,7 +239,7 @@ class Communication {
 
     Uint8List status2Request = Uint8List.fromList([
       0xAA,
-      0xF0,
+      0x0F,
       0x02,
       0x14,
       0x1B,
@@ -291,11 +291,45 @@ class Communication {
       0xAA, 0x03, 0x01, 0x14, 0x16, 0xDD
     ]);
 
+    Uint8List unknownReply = Uint8List.fromList([
+      0xAA, 0x03, 0x01, 0x00, 0x02, 0xDD
+    ]);
 
+    Uint8List dispensing = Uint8List.fromList([
+      0xAA, 0x03, 0x01, 0xD1, 0x20, 0xF3, 0xDD
+    ]);
+
+    Uint8List cashteldis = Uint8List.fromList([
+      0xAA, 0x04, 0x01, 0xD1, 0x06, 0xD2, 0xDD
+    ]);
+
+    Uint8List qrteldis = Uint8List.fromList([
+      0xAA, 0x04, 0x02, 0xD1, 0x05, 0xD1, 0xDD
+    ]);
+    //aa 03 02 19 18 dd
+    Uint8List aftersoldout = Uint8List.fromList([
+      0xAA, 0x03, 0x02, 0x19, 0x18, 0xDD
+    ]);
+    Uint8List aftersoldoutres = Uint8List.fromList([
+      0xAA, 0x05, 0x01, 0x19, 0x00 , 0x00, 0x1D, 0xDD
+    ]);
+    Uint8List reqres = Uint8List.fromList([
+      0xAA, 0x0F, 0x02, 0xD1, 0x02, 0x00, 0x00, 0x00, 0x5E, 0x66, 0x48, 0x00, 0x00
+    ]);
+
+    Uint8List aftersoldoutres2 = Uint8List.fromList([
+      0xAA, 0x0B, 0x01, 0x01, 0x41, 0x30, 0x30, 0x30, 0x30, 0x32, 0x33, 0x36, 0x7D, 0xDD
+    ]);
+    Uint8List aftersoldoutaccept2 = Uint8List.fromList([
+      0xAA, 0x05, 0x02, 0x01, 0x85, 0x17, 0x94, 0xDD
+    ]);
+    //AA 05 02 01 85 17 94 DD
+
+    //AA 05 01 19 00 00 1D DD
 
     _port!.inputStream?.listen((Uint8List data) async {
-      print('Raw data: $data'); // Prints the raw data bytes
-      print('Hex data: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}'); // Print hex data
+
+      print('IN: <<< ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}'); // Print hex data
 
       // Compare received data to the expected response
 
@@ -305,41 +339,70 @@ class Communication {
         print('Expected response received (polling). Sending reply...');
 
         // Send the reply message
-        _port!.write(pcToPollingPCB);
+       await _port!.write(pcToPollingPCB);
+        await Future.delayed(Duration(milliseconds: 200));
+        await _port!.write(aftersoldoutres2);
         print(
-            'Reply sent: ${pcToPollingPCB.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+            'OUT >>>: ${pcToPollingPCB.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       }
 
       //status1
-      if (_listEquals(data, status1Request) ||
+     else if (_listEquals(data, status1Request)
+          ) {
+        print('Expected response received (status 1). Sending reply...');
+
+        if(isQr == false && isDispenseCash == false){
+          myHomePageKey.currentState?.setLatestFailedTrx();
+        }
+        // Send the reply message
+        _port!.write(statusResponse);
+        print(
+            'OUT >>>: ${statusResponse.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      }
+     //status2
+      //status1
+      else if (
           _listEquals(data, status2Request)) {
-        print('Expected response received (status 1 or 2). Sending reply...');
+        print('Expected response received (status 2). Sending reply...');
+
 
         // Send the reply message
         _port!.write(statusResponse);
         print(
-            'Reply sent: ${statusResponse.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+            'OUT >>>: ${statusResponse.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       }
 
       //Req
-      if (_listEquals(data, ReqResponse)) {
+     else if (_listEquals(data, ReqResponse)) {
         print('Expected response received (reqDis). Sending reply...');
 
         final discom = await createDispenseCommand();
         // Send the reply message
         _port!.write(discom);
         print(
-            'Reply sent: ${discom.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+            'OUT >>>: ${discom.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       }
 
       // handle soldout
-      if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x0F && data[2] == 0x02 && data[3] == 0x14) {
+      //qr
+      //aa 0f 02 d1 02 00 00 00 5e 66 d5 00 00 01 0a 00 38 dd
+      //aa 0f 02 14 1b 03 00 00 00 00 00 00 00 00 00 00 01 dd
+      //aa 0f 02 14 1c 03 00 00 00 00 00 00 00 00 00 00 06 dd
+      //cash
+      //aa 0f 02 14 1b 03 00 00 00 00 00 00 00 00 00 00 01 dd
+      //aa 0f 02 14 1c 03 00 00 00 00 00 00 00 00 00 00 06 dd
+      //after restart
+      // aa 0f 02 14 1a 01 00 00 00 00 00 00 00 00 00 00 02 dd
+
+
+      else if (data.length >= 18 &&
+          data[0] == 0xAA && data[1] == 0x0F && data[2] == 0x02 && data[3] == 0x14 &&
+          data[4] == 0x1C && data[5] == 0x03) {
+
         print('Expected response received (soldout). Sending reply...');
         isSoldOut = true;
 
-        if(isQr == false && isDispenseCash == false){
-          myHomePageKey.currentState?.setLatestFailedTrx();
-        }
+        myHomePageKey.currentState?.setSoldout();
 
         if(isQr == false && isDispenseCash == true) {
 
@@ -348,11 +411,11 @@ class Communication {
         // Send the reply message
         _port!.write(resSoldOut2);
         print(
-            'Reply sent: ${resSoldOut2.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+            'OUT >>>: ${resSoldOut2.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       }
 
       // Dispensing Check if the response starts with the valid start byte
-      if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x0C && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x20) {
+     else if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x0C && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x20) {
         print("Dispensing.");
 
         // Check if the response length is correct
@@ -373,7 +436,10 @@ class Communication {
           print("Cash Value: $cashValue");
           print("Total Needed to Dispense: $totalNeeded");
           print("Remaining to Dispense: $RemainingtoDispense");
-
+          // Send the reply message
+          _port!.write(dispensing);
+          print(
+              'OUT >>>: ${dispensing.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
           // if(RemainingtoDispense == 0 && cashValue == 0)
           //   {
           //     isCompleteDispense = true;
@@ -394,7 +460,7 @@ class Communication {
         }
       }
       //UTD QR
-      if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x13 && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x05
+    else  if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x13 && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x05
       ) {
         print("Dispensed, QR UTD here.");
 
@@ -414,6 +480,11 @@ class Communication {
         print("Qr Dispense Counter: $QRDispenseCounter");
         print("UTD qr Dispense Counter: $UTDQRDispenseCounter");
 
+        // Send the reply message
+        _port!.write(qrteldis);
+        print(
+            'OUT >>>: ${qrteldis.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
         totalUtdQr = UTDQRDispenseCounter;
 
         if(QRDispenseCounter > 0)
@@ -425,7 +496,7 @@ class Communication {
       }
 
       //UTD cash
-      if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x19 && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x06
+     else if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x19 && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x06
       ) {
         print("Dispensed, Cash UTD here.");
         isDispenseCash = true;
@@ -460,7 +531,10 @@ class Communication {
           print("Cash Counter: $CASHCounter");
           print("UTD Cash Counter: $UTDCASHCounter");
 
-
+          // Send the reply message
+          _port!.write(cashteldis);
+          print(
+              'OUT >>>: ${cashteldis.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
           if(CASHDispenseCounter > 0 && UTDCASHDispenseCounter > 0) {
             myHomePageKey.currentState?.InsertCash(
                 'Completed', UTDCASHCounter, CASHCounter,
@@ -476,6 +550,35 @@ class Communication {
         } else {
           print("Invalid response length.");
         }
+      }
+       //req res
+      //aa 0f 02 d1 02 00 00 00 5e 66 d5 00 00 01 0a 00 38 dd
+      else if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x0F && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x02
+          && data[5] == 0x00 && data[6] == 0x00 && data[7] == 0x00 && data[8] == 0x5E && data[9] == 0x66  && data[10] == sentreqcommand[10]
+      ) {
+        print("Accepted request receive ");
+      }
+      else if (_listEquals(data, aftersoldout)) {
+        await _port!.write(aftersoldoutres);
+        await Future.delayed(Duration(milliseconds: 200));
+        await _port!.write(aftersoldoutres2);
+        print(
+            'OUT >>>: ${aftersoldoutres.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      }
+
+      else if (_listEquals(data, aftersoldoutaccept2)) {
+
+        print(
+            'new ***');
+      }
+
+     else{
+        print("Unknown Comm detected");
+        unknownReply[3] = data[3];
+        _port!.write(unknownReply);
+        print(
+            'OUT >>>: ${unknownReply.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
       }
 
 
@@ -651,7 +754,8 @@ class Communication {
 
     // Assign the checksum to the second last element
     command[15] = checksum;
-
+    //aa 0f 02 d1 02 00 00 00 5e 66 d5 00 00 01 0a 00 38 dd
+    sentreqcommand.addAll([0xAA, 0x0F, 0x02, 0xD1, 0x02, 0x00, 0x00, 0x00, 0x5E, 0x66, command[10]]);
     // Convert to Uint8List and return
     return Uint8List.fromList(command);
   }

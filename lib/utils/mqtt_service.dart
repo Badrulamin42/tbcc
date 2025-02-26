@@ -90,6 +90,16 @@ class MqttService {
     Future.delayed(Duration(seconds: 5), () {
       connect(onMessageReceivedCallback: onMessageReceived); // Attempt to reconnect
     });
+
+    Timer.periodic(Duration(minutes: 1), (timer) {
+      if (client.connectionStatus!.state != MqttConnectionState.connected) {
+        print("Connection lost! Reconnecting...");
+        connect(onMessageReceivedCallback: onMessageReceived);
+      }
+      else{
+        print("mqtt connection is stable");
+      }
+    });
   }
 
   void startConnectionChecker() {
