@@ -37,6 +37,7 @@ class Communication {
   int UtdCash = 0;
   int CashCounter = 0;
   int cashValue_ = 0;
+  int CASHDispenseCounter_ = 0;
   bool isDispenseCash = false;
   List<int> sentreqcommand = [];
 
@@ -412,7 +413,7 @@ class Communication {
 
         myHomePageKey.currentState?.setSoldout();
 
-        if(isQr == false && isDispenseCash == true) {
+        if(isQr == false) {
 
           myHomePageKey.currentState?.InsertCash('Failed', 0, 0, 0);
         }
@@ -550,7 +551,7 @@ class Communication {
             isCompleteDispense = true;
 
             print('cash dispense complete true');
-
+            CASHDispenseCounter_ = CASHDispenseCounter;
             CashCounter = CASHCounter;
             UtdCash = UTDCASHDispenseCounter;
           }

@@ -2,3 +2,11 @@ mosquitto_sub -h mqtts://www.transpire.com.my -p 8883 -t "TQR000001" --cafile "C
 
 mosquitto_sub -h mqtts://transpireqr-api.transpire.com.my -p 8883 -t "/TQR/TQR000001" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"
 mosquitto_sub -h transpireqr-api.transpire.com.my -p 8883 -t "/TQR/TQR000001" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"
+
+mosquitto_sub -h transpireqr-api.transpire.com.my -p 8883 -t "/TSQR/TSQR00000" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"
+
+
+mosquitto_sub -h tqrdnqr-api.transpire.com.my -p 8883 -t "/TQR/TQRD89999" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"
+
+
+mosquitto_sub -h tqrdnqr-api.transpire.com.my -p 8883 -t "/TSQR/TSQR00000" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"

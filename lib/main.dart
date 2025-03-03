@@ -194,7 +194,7 @@ class _MyHomePageState extends State<MyHomePage> {
   List<UsbDevice> myStringArray = [];
   UsbDevice?
       selectedPort; // Declare it inside the method, ensuring it's not null
-  bool isConnected = false;
+  bool isConnected = true;
   String UTDQR = '0';
   String qrCompanyname = '';
   String _savedText = ''; // Variable to store the saved text
@@ -226,6 +226,8 @@ class _MyHomePageState extends State<MyHomePage> {
   String key = "";
   bool _antiSpamButton = false; // Flag to prevent spamming
   Timer? _reconnectTimer;
+  bool _isDialogOpen = false; // Prevent multiple dialogs
+  BuildContext? _dialogContext; // Store dialog context to close later
 
   void onMqttConnected() {
     setState(() {
@@ -888,6 +890,46 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
       break; // No need to check further once internet is found
+    }
+
+    // If disconnected and dialog is not open, show dialog
+    if (!isConnected && !_isDialogOpen) {
+      _isDialogOpen = true;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogCtx) {
+          _dialogContext = dialogCtx; // Save dialog context for closing
+          return AlertDialog(
+            title: Text("No Connection"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.cancel, color: Colors.red, size: 50),
+                const SizedBox(height: 16),
+                Text("Please make sure that you are connected."),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  _isDialogOpen = false;
+                  Navigator.pop(dialogCtx);
+                },
+                child: Text("Okay"),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    // If connected, close the dialog automatically
+    if (isConnected && _isDialogOpen && _dialogContext != null) {
+      Navigator.pop(_dialogContext!); // Close dialog
+      _isDialogOpen = false;
+      _dialogContext = null;
     }
   }
 
@@ -1627,6 +1669,7 @@ class _MyHomePageState extends State<MyHomePage> {
         // Retry until isCompleteDispense becomes true or retries exceed maxRetries
         while (retries < maxRetries) {
           if (communication.isCompleteDispense) {
+
             final encryptedKey =
                 encryptPlainText(deviceCode, secretKey, ivString);
 
@@ -1666,7 +1709,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   "coinTubeCounter": "0.00",
                   "utdCoinBox": "0.00",
                   "coinBoxCounter": "0.00",
-                  "amount": (latestCashValue / 100).toString(),
+                  "amount": latestCashValue == 0 ? communication.CASHDispenseCounter_.toString() : (latestCashValue / 100).toString(),
                   "slot": "5",
                   "rssi": "-99"
                 }
@@ -2009,7 +2052,7 @@ class _MyHomePageState extends State<MyHomePage> {
     initConnectivity();
     _reconnectTimer?.cancel();
 
-    _reconnectTimer = Timer.periodic(Duration(seconds: 5), (timer) {
+    _reconnectTimer = Timer.periodic(Duration(seconds: 10), (timer) {
       initConnectivity();
     });
 
@@ -4136,6 +4179,63 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
 
+          // if (isConnected)
+          //   Container(
+          //     color:
+          //     Colors.black.withOpacity(0.5), // Semi-transparent background
+          //     child: Center(
+          //       child: Container(
+          //         padding: const EdgeInsets.all(20), // Padding inside the box
+          //         decoration: BoxDecoration(
+          //           color: Colors.white, // White background
+          //           borderRadius: BorderRadius.circular(12), // Rounded corners
+          //         ),
+          //         child: Column(
+          //           mainAxisSize: MainAxisSize.min, // Minimum space taken
+          //           crossAxisAlignment:
+          //           CrossAxisAlignment.center, // Center content
+          //           children: [
+          //             Icon(
+          //               Icons.cancel,
+          //               color: Colors.red,
+          //               size: 50, // Icon size
+          //             ),
+          //             const SizedBox(height: 16), // Space between icon and text
+          //             SizedBox(
+          //               width: 550, // Forces text to take full width
+          //               child: Text(
+          //                'No connection',
+          //                 textAlign:
+          //                 TextAlign.center, // Ensure text is centered
+          //                 style: TextStyle(
+          //                   color: Colors.black,
+          //                   fontSize: 32,
+          //                   fontWeight: FontWeight.bold,
+          //                 ),
+          //               ),
+          //
+          //               // The button is centered by default since the Column is centered.
+          //             ),
+          //             Text(
+          //               'Please make sure that you are connected',
+          //               textAlign: TextAlign.center, // Ensure text is centered
+          //               style: TextStyle(
+          //                 color: Colors.yellow,
+          //                 fontSize: 32,
+          //                 fontWeight: FontWeight.bold,
+          //               ),
+          //             ),
+          //             const SizedBox(height: 16), // Space between icon and text
+          //             ElevatedButton(
+          //               onPressed: () =>   Navigator.pop(context),
+          //               child: const Text('Okay'),
+          //             ),
+          //           ],
+          //         ),
+          //       ),
+          //     ),
+          //   ),
+
           if (isLatestSoldout)
             Container(
               color:
@@ -4161,9 +4261,9 @@ class _MyHomePageState extends State<MyHomePage> {
                       SizedBox(
                         width: 550, // Forces text to take full width
                         child: Text(
-                          'Please wait,\n '
-                          'Ensure the token is filled!'
-                          '\nRemaining Token : $remainingTodispenseAm',
+                          remainingTodispenseAm == 0
+                              ? 'Please wait,\nEnsure the token is filled!'
+                              : 'Please wait,\nEnsure the token is filled!\nRemaining Token: $remainingTodispenseAm',
                           textAlign:
                               TextAlign.center, // Ensure text is centered
                           style: TextStyle(
@@ -4220,9 +4320,10 @@ class _MyHomePageState extends State<MyHomePage> {
                       SizedBox(
                         width: 375, // Forces text to take full width
                         child: Text(
-                          'Soldout! \nRemaining Token : $remainingTodispenseAm',
-                          textAlign:
-                              TextAlign.center, // Ensure text is centered
+                          remainingTodispenseAm == 0
+                              ? 'Soldout!'  // If no tokens were dispensed
+                              : 'Soldout! \nRemaining Token: $remainingTodispenseAm',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.black,
                             fontSize: 32,
