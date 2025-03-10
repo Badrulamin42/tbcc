@@ -611,7 +611,7 @@ class Communication {
     await sendData(requestDispense);
 
 
-    const int maxRetries = 60; // Maximum retries
+    const int maxRetries = 30; // Maximum retries
     int retries = 0;
 
     // Retry until isCompleteDispense becomes true or retries exceed maxRetries

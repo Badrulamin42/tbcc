@@ -2495,6 +2495,7 @@ class _MyHomePageState extends State<MyHomePage> {
           saveSoldout(true);
           // isMachineFaulty = true;
         } else {
+          cancelFetchTRX("Timeout");
           Errormsg = 'Timeout';
         }
       });
@@ -2558,7 +2559,7 @@ class _MyHomePageState extends State<MyHomePage> {
     //fetch api successful dispense
   }
 
-  Future<void> cancelFetchTRX() async {
+  Future<void> cancelFetchTRX(String errorMsg) async {
     if (ReceivedPayment) {
       print('Payment has Received, closing QR modal, Ignore Fetch CancelTRX');
     } else {
@@ -2582,7 +2583,7 @@ class _MyHomePageState extends State<MyHomePage> {
             "numberofinquiry": "0",
             "duration": "0/175",
             "errorcode": "255",
-            "errormessage": "USER CANCELLED",
+            "errormessage": errorMsg,
             "ewallettestusercode": "",
             "responsetime": "2",
             "rssi": rssi
@@ -3287,7 +3288,7 @@ class _MyHomePageState extends State<MyHomePage> {
           Navigator.of(context)
               .pop(); // Close the modal when countdown reaches 0
 
-          cancelFetchTRX();
+          cancelFetchTRX("Qr timeout");
         }
       });
     }
@@ -3417,7 +3418,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         onPressed: () {
                           timer?.cancel(); // Stop the countdown timer
                           Navigator.of(context).pop(); // Close the modal
-                          cancelFetchTRX();
+                          cancelFetchTRX("User Cancelled");
                         },
                       ),
                     ),
