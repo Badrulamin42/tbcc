@@ -2495,8 +2495,9 @@ class _MyHomePageState extends State<MyHomePage> {
           saveSoldout(true);
           // isMachineFaulty = true;
         } else {
-          cancelFetchTRX("Timeout");
+
           Errormsg = 'Timeout';
+          cancelFetchTRX("Timeout");
         }
       });
 
@@ -4042,15 +4043,15 @@ class _MyHomePageState extends State<MyHomePage> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      // if (CompletedDispense == false && FailedDispense == true)
-                      //   Text(
-                      //     'Dispensing Failed, ' + Errormsg,
-                      //     style: const TextStyle(
-                      //       color: Colors.black,
-                      //       fontSize: 32,
-                      //       fontWeight: FontWeight.bold,
-                      //     ),
-                      //   ),
+                      if (CompletedDispense == false && FailedDispense == true)
+                        Text(
+                          'Dispense is Failed, ' + Errormsg,
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                     ],
                   ),
                 ),
