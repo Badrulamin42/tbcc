@@ -2560,9 +2560,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> cancelFetchTRX(String errorMsg) async {
-    if (ReceivedPayment) {
-      print('Payment has Received, closing QR modal, Ignore Fetch CancelTRX');
-    } else {
+
       final privateKeyPem = await loadPrivateKey();
       final payloadcanceltrx = {
         "commandcode": "DI_SetTransactionEWalletV2",
@@ -2612,7 +2610,7 @@ class _MyHomePageState extends State<MyHomePage> {
       } catch (err) {
         print('Error during fetch cancel trx: $err');
       }
-    }
+
   }
 
   Future<void> handleButtonPress({
