@@ -227,6 +227,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _antiSpamButton = false; // Flag to prevent spamming
   Timer? _reconnectTimer;
   bool _isDialogOpen = false; // Prevent multiple dialogs
+  bool _isSetLatestRunning = false; // Prevent multiple dialogs
   BuildContext? _dialogContext; // Store dialog context to close later
 
   void onMqttConnected() {
@@ -1519,253 +1520,299 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void setLatestFailedTrx() async {
-    List transactions = await getFailedTrx();
-    // only run after restarted
-    if (isLatestSoldout) {
-      print('recently soldout detected');
-      if (isLatestQR) {
-        if (transactions.isNotEmpty) {
-          Map<String, dynamic> firstTransaction =
-              transactions[0]; // Get the first item
-          final frefid = firstTransaction['trxid'];
-          final famount = firstTransaction['amount'];
-          final futdqr = firstTransaction['utdqr'];
 
-          final encryptedKey =
+    if(_isSetLatestRunning == false)
+      {
+        setState(() {
+          _isSetLatestRunning = true;
+        });
+
+        List transactions = await getFailedTrx();
+        // only run after restarted
+        if (isLatestSoldout) {
+          print('recently soldout detected');
+          if (isLatestQR) {
+            if (transactions.isNotEmpty) {
+              Map<String, dynamic> firstTransaction =
+              transactions[0]; // Get the first item
+              final frefid = firstTransaction['trxid'];
+              final famount = firstTransaction['amount'];
+              final futdqr = firstTransaction['utdqr'];
+
+              final encryptedKey =
               encryptPlainText(deviceCode, secretKey, ivString);
 
-          final payloadtoken = {
-            "commandcode": "RequestToken",
-            "devicecode": deviceCode,
-            "result": "false",
-            "data": [
-              {"key": encryptedKey}
-            ]
-          };
-
-          final responsetoken = await http.post(
-            Uri.parse(apiUrl),
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: json.encode(payloadtoken),
-          );
-
-          const int maxRetries = 30; // Maximum retries
-          int retries = 0;
-
-          // Retry until isCompleteDispense becomes true or retries exceed maxRetries
-          while (retries < maxRetries) {
-            print('test : ');
-            print(communication.isCompleteDispense);
-
-            if (communication.isCompleteDispense) {
-              final SuccessPaymentPayloadtrx = {
-                "commandcode": "DI_SetTransactionEWalletV2",
+              final payloadtoken = {
+                "commandcode": "RequestToken",
                 "devicecode": deviceCode,
+                "result": "false",
                 "data": [
-                  {
-                    "machineid": machineId,
-                    "statusstarttime": getFormattedDateTime(),
-                    "status": "Success",
-                    "eutdcounter": communication.totalUtdQr,
-                    "eamount": famount,
-                    "eoriginalamount": famount,
-                    "qrcode": "",
-                    "ewallettransactionid": frefid,
-                    "ewallettypecode": "DUITNOW",
-                    "numberofinquiry": "0",
-                    "duration": "0/175",
-                    "errorcode": "0",
-                    "errormessage": "",
-                    "ewallettestusercode": "",
-                    "slot": "55",
-                    "responsetime": "1",
-                    "rssi": "114"
-                  }
+                  {"key": encryptedKey}
                 ]
               };
-              // If isCompleteDispense becomes true, return 'Completed'
+
+              final responsetoken = await http.post(
+                Uri.parse(apiUrl),
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: json.encode(payloadtoken),
+              );
+
+              const int maxRetries = 30; // Maximum retries
+              int retries = 0;
+
+              // Retry until isCompleteDispense becomes true or retries exceed maxRetries
+              while (retries < maxRetries) {
+                print('test : ');
+                print(communication.isCompleteDispense);
+
+                if (communication.isCompleteDispense) {
+                  final SuccessPaymentPayloadtrx = {
+                    "commandcode": "DI_SetTransactionEWalletV2",
+                    "devicecode": deviceCode,
+                    "data": [
+                      {
+                        "machineid": machineId,
+                        "statusstarttime": getFormattedDateTime(),
+                        "status": "Success",
+                        "eutdcounter": communication.totalUtdQr,
+                        "eamount": famount,
+                        "eoriginalamount": famount,
+                        "qrcode": "",
+                        "ewallettransactionid": frefid,
+                        "ewallettypecode": "DUITNOW",
+                        "numberofinquiry": "0",
+                        "duration": "0/175",
+                        "errorcode": "0",
+                        "errormessage": "",
+                        "ewallettestusercode": "",
+                        "slot": "55",
+                        "responsetime": "1",
+                        "rssi": "114"
+                      }
+                    ]
+                  };
+                  // If isCompleteDispense becomes true, return 'Completed'
+                  communication.isCompleteDispense =
+                  false; // Reset the flag for future operations
+                  communication.isSoldOut =
+                  false; // Reset the flag for future operations
+                  communication.isDispenseCash = false;
+                  communication.isQr = false;
+
+                  // fetch success api
+                  if (responsetoken.statusCode == 200) {
+                    Map<String, dynamic> parsedJson =
+                    jsonDecode(responsetoken.body);
+                    String token = parsedJson['data'][0]['token'];
+
+                    final privateKeyPem = await loadPrivateKey();
+                    String signature = await generateSignature(
+                        jsonEncode(SuccessPaymentPayloadtrx), key);
+
+                    final responseSuccessTRXEW = await http.post(
+                      Uri.parse(apiUrl),
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Token': token,
+                        'Signature': signature
+                      },
+                      body: json.encode(SuccessPaymentPayloadtrx),
+                    );
+
+                    if (responseSuccessTRXEW.statusCode == 200) {
+                      print('Transaction:Success sent successfully');
+                    } else {
+                      print(
+                          'Failed to success transaction. Status code: ${responseSuccessTRXEW.statusCode}');
+                    }
+
+                    await clearFailedTrx();
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.remove('isLatestSoldout');
+                    await prefs.remove('isLatestQR');
+                    setState(() {
+                      remainingTodispenseAm = 0;
+                      latestCashValue = 0;
+                      isLatestQR = false;
+                      isLatestSoldout = false;
+                      _isSetLatestRunning = false;
+                    });
+                    return;
+                  }
+                }
+                print('soldout returned');
+
+                // Wait for the specified interval before retrying
+                await Future.delayed(Duration(milliseconds: 2000));
+                retries++;
+              }
+            } else {
+              await clearFailedTrx();
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('isLatestSoldout');
+              await prefs.remove('isLatestQR');
+
               communication.isCompleteDispense =
-                  false; // Reset the flag for future operations
+              false; // Reset the flag for future operations
               communication.isSoldOut =
-                  false; // Reset the flag for future operations
+              false; // Reset the flag for future operations
               communication.isDispenseCash = false;
               communication.isQr = false;
 
-              // fetch success api
-              if (responsetoken.statusCode == 200) {
-                Map<String, dynamic> parsedJson =
-                    jsonDecode(responsetoken.body);
-                String token = parsedJson['data'][0]['token'];
+              setState(() {
+                remainingTodispenseAm = 0;
+                latestCashValue = 0;
+                isLatestQR = false;
+                isLatestSoldout = false;
+                _isSetLatestRunning = false;
+              });
+              return;
+            }
+          }
 
-                final privateKeyPem = await loadPrivateKey();
-                String signature = await generateSignature(
-                    jsonEncode(SuccessPaymentPayloadtrx), key);
+          // latest cash trx
+          else {
+            if (transactions.isNotEmpty){
+              const int maxRetries = 30; // Maximum retries
+              int retries = 0;
 
-                final responseSuccessTRXEW = await http.post(
-                  Uri.parse(apiUrl),
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Token': token,
-                    'Signature': signature
-                  },
-                  body: json.encode(SuccessPaymentPayloadtrx),
-                );
+              // Retry until isCompleteDispense becomes true or retries exceed maxRetries
+              while (retries < maxRetries) {
+                if (communication.isCompleteDispense) {
 
-                if (responseSuccessTRXEW.statusCode == 200) {
-                  print('Transaction:Success sent successfully');
+                  final encryptedKey =
+                  encryptPlainText(deviceCode, secretKey, ivString);
+
+                  final payloadtoken = {
+                    "commandcode": "RequestToken",
+                    "devicecode": deviceCode,
+                    "result": "false",
+                    "data": [
+                      {"key": encryptedKey}
+                    ]
+                  };
+                  // final response = await http.get(Uri.parse(apiUrl));
+                  final responsetoken = await http.post(
+                    Uri.parse(apiUrl),
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: json.encode(payloadtoken),
+                  );
+
+                  communication.isSoldOut =
+                  false; // Reset the flag for future operations
+                  communication.isCompleteDispense =
+                  false; // Reset the flag for future operations
+                  communication.isDispenseCash = false;
+                  communication.isQr = false;
+
+                  final setcashpayload = {
+                    "commandcode": "SetTransactionCash",
+                    "devicecode": deviceCode,
+                    "data": [
+                      {
+                        "statusstarttime": getFormattedDateTime(),
+                        "utdcounter": communication.UtdCash.toString(),
+                        "cashcounter": communication.CashCounter.toString(),
+                        "utdCoinTube": "0.00",
+                        "coinTubeCounter": "0.00",
+                        "utdCoinBox": "0.00",
+                        "coinBoxCounter": "0.00",
+                        "amount": latestCashValue == 0 ? communication.CASHDispenseCounter_.toString() : (latestCashValue / 100).toString(),
+                        "slot": "5",
+                        "rssi": "-99"
+                      }
+                    ]
+                  };
+
+                  final privateKeyPem = await loadPrivateKey();
+                  String signature =
+                  await generateSignature(jsonEncode(setcashpayload), key);
+
+                  if (responsetoken.statusCode == 200) {
+                    final responseData = json.decode(responsetoken.body);
+                    Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
+                    String token = parsedJson['data'][0]['token'];
+
+                    print('request token success');
+                    final responseSetCashTrx = http.post(
+                      Uri.parse(apiUrl),
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Token': token,
+                        'Signature': signature
+                      },
+                      body: json.encode(setcashpayload),
+                    );
+                  }
+                  await clearFailedTrx();
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.remove('isLatestSoldout');
+                  await prefs.remove('isLatestQR');
+                  await prefs.remove('latestCashValue');
+
+                  setState(() {
+                    remainingTodispenseAm = 0;
+                    latestCashValue = 0;
+                    isLatestQR = false;
+                    isLatestSoldout = false;
+                    _isSetLatestRunning = false;
+                  });
+                  print("transactions cash uploaded.");
+                  return;
                 } else {
-                  print(
-                      'Failed to success transaction. Status code: ${responseSuccessTRXEW.statusCode}');
+                  print("No failed transactions found.");
                 }
 
-                await clearFailedTrx();
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.remove('isLatestSoldout');
-                await prefs.remove('isLatestQR');
-                setState(() {
-                  remainingTodispenseAm = 0;
-                  latestCashValue = 0;
-                  isLatestQR = false;
-                  isLatestSoldout = false;
-                });
-                return;
+                await Future.delayed(Duration(milliseconds: 2000));
+                retries++;
               }
             }
-            print('soldout returned');
+            else {
+              await clearFailedTrx();
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('isLatestSoldout');
+              await prefs.remove('isLatestQR');
 
-            // Wait for the specified interval before retrying
-            await Future.delayed(Duration(milliseconds: 2000));
-            retries++;
+              communication.isCompleteDispense =
+              false; // Reset the flag for future operations
+              communication.isSoldOut =
+              false; // Reset the flag for future operations
+              communication.isDispenseCash = false;
+              communication.isQr = false;
+
+              setState(() {
+                remainingTodispenseAm = 0;
+                latestCashValue = 0;
+                isLatestQR = false;
+                isLatestSoldout = false;
+                _isSetLatestRunning = false;
+              });
+              return;
+            }
           }
+
         } else {
+          await clearFailedTrx();
           final prefs = await SharedPreferences.getInstance();
           await prefs.remove('isLatestSoldout');
           await prefs.remove('isLatestQR');
-
-          communication.isCompleteDispense =
-              false; // Reset the flag for future operations
-          communication.isSoldOut =
-              false; // Reset the flag for future operations
-          communication.isDispenseCash = false;
-          communication.isQr = false;
-
+          await prefs.remove('latestCashValue');
           setState(() {
             remainingTodispenseAm = 0;
             latestCashValue = 0;
             isLatestQR = false;
             isLatestSoldout = false;
+            _isSetLatestRunning = false;
           });
-          return;
+
         }
       }
 
-      // latest cash trx
-      else {
-        const int maxRetries = 30; // Maximum retries
-        int retries = 0;
 
-        // Retry until isCompleteDispense becomes true or retries exceed maxRetries
-        while (retries < maxRetries) {
-          if (communication.isCompleteDispense) {
-
-            final encryptedKey =
-                encryptPlainText(deviceCode, secretKey, ivString);
-
-            final payloadtoken = {
-              "commandcode": "RequestToken",
-              "devicecode": deviceCode,
-              "result": "false",
-              "data": [
-                {"key": encryptedKey}
-              ]
-            };
-            // final response = await http.get(Uri.parse(apiUrl));
-            final responsetoken = await http.post(
-              Uri.parse(apiUrl),
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: json.encode(payloadtoken),
-            );
-
-            communication.isSoldOut =
-                false; // Reset the flag for future operations
-            communication.isCompleteDispense =
-                false; // Reset the flag for future operations
-            communication.isDispenseCash = false;
-            communication.isQr = false;
-
-            final setcashpayload = {
-              "commandcode": "SetTransactionCash",
-              "devicecode": deviceCode,
-              "data": [
-                {
-                  "statusstarttime": getFormattedDateTime(),
-                  "utdcounter": communication.UtdCash.toString(),
-                  "cashcounter": communication.CashCounter.toString(),
-                  "utdCoinTube": "0.00",
-                  "coinTubeCounter": "0.00",
-                  "utdCoinBox": "0.00",
-                  "coinBoxCounter": "0.00",
-                  "amount": latestCashValue == 0 ? communication.CASHDispenseCounter_.toString() : (latestCashValue / 100).toString(),
-                  "slot": "5",
-                  "rssi": "-99"
-                }
-              ]
-            };
-
-            final privateKeyPem = await loadPrivateKey();
-            String signature =
-                await generateSignature(jsonEncode(setcashpayload), key);
-
-            if (responsetoken.statusCode == 200) {
-              final responseData = json.decode(responsetoken.body);
-              Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
-              String token = parsedJson['data'][0]['token'];
-
-              print('request token success');
-              final responseSetCashTrx = http.post(
-                Uri.parse(apiUrl),
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Token': token,
-                  'Signature': signature
-                },
-                body: json.encode(setcashpayload),
-              );
-            }
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.remove('isLatestSoldout');
-            await prefs.remove('isLatestQR');
-            await prefs.remove('latestCashValue');
-
-            setState(() {
-              remainingTodispenseAm = 0;
-              latestCashValue = 0;
-              isLatestQR = false;
-              isLatestSoldout = false;
-            });
-            print("transactions cash uploaded.");
-            return;
-          } else {
-            print("No failed transactions found.");
-          }
-
-          await Future.delayed(Duration(milliseconds: 2000));
-          retries++;
-        }
-      }
-
-      // await clearFailedTrx();
-      // final prefs = await SharedPreferences.getInstance();
-      // await prefs.remove('isLatestSoldout');
-      // await prefs.remove('isLatestQR');
-      // return;
-    } else {
-      print('here should be save the soldout and qr/cash');
-    }
   }
 
   void InsertCash(
