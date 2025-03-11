@@ -645,6 +645,50 @@ class Communication {
       // Compare received data to the expected response
 
 
+        // print("=== Starting Serial Data Test ===");
+        //
+        // // Initialize buffer (if needed)
+        // _buffer = [];
+        //
+        // // Test 1: Valid Message
+        // print("\nTest 1: Valid Complete Message");
+        // await _handleIncomingData(Uint8List.fromList([
+        //   0xAA, 0x05, 0x01, 0x19, 0x00, 0x00, 0x1D, 0xDD
+        // ]));
+        //
+        // // Test 2: Split Message (Part 1 & Part 2)
+        // print("\nTest 2: Incomplete Data Sent in Two Parts");
+        // await _handleIncomingData(Uint8List.fromList([
+        //   0xAA, 0x05, 0x01, 0x19
+        // ])); // First part
+        //
+        // await Future.delayed(Duration(milliseconds: 500)); // Simulate delay
+        //
+        // await _handleIncomingData(Uint8List.fromList([
+        //   0x00, 0x00, 0x1D, 0xDD
+        // ])); // Second part
+        //
+        // // Test 3: Invalid Message (Wrong End Byte)
+        // print("\nTest 3: Invalid End Byte");
+        // await _handleIncomingData(Uint8List.fromList([
+        //   0xAA, 0x05, 0x01, 0x19, 0x00, 0x00, 0x1D, 0xEE // Wrong end byte
+        // ]));
+        //
+        // // Test 4: Invalid Start Byte
+        // print("\nTest 4: Wrong Start Byte");
+        // await _handleIncomingData(Uint8List.fromList([
+        //   0xFF, 0x05, 0x01, 0x19, 0x00, 0x00, 0x1D, 0xDD
+        // ]));
+        //
+        // // Test 5: Random Garbage Data
+        // print("\nTest 5: Garbage Data Before Valid Message");
+        // await _handleIncomingData(Uint8List.fromList([
+        //   0x00, 0x00, 0x00, 0xAA, 0x05, 0x01, 0x19, 0x00, 0x00, 0x1D, 0xDD
+        // ]));
+        //
+        // print("\n=== Serial Data Test Completed ===");
+        //
+
 
     });
   }
