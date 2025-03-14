@@ -2651,6 +2651,19 @@ class _MyHomePageState extends State<MyHomePage> {
 
         if (responseTRXEW.statusCode == 200) {
           print('Transaction cancelled successfully');
+
+          if(errorMsg == 'Timeout')
+            {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                      "Refund request successfully sent ✅. Processing time may vary—please check your e-wallet within 24 hours."
+                  ),
+                  duration: Duration(minutes: 5), // Set duration to 5 minutes
+                ),
+              );
+            }
+
         } else {
           print(
               'Failed to cancel transaction. Status code: ${responseTRXEW.statusCode}');

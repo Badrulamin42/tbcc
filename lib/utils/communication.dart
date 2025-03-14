@@ -32,6 +32,7 @@ class Communication {
   bool isQr = false;
   bool isSoldOut = false;
   bool isCompleteDispense = false;
+  bool isDispensing = false;
   int dispenseAmount = 0;
   int totalUtdQr= 0;
   int UtdCash = 0;
@@ -452,7 +453,7 @@ class Communication {
 
       print('Expected response received (soldout). Sending reply...');
       isSoldOut = true;
-
+      isDispensing = false;
       myHomePageKey.currentState?.setSoldout();
 
       if(isQr == false) {
@@ -468,7 +469,7 @@ class Communication {
     // Dispensing Check if the response starts with the valid start byte
     else if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x0C && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x20) {
       print("Dispensing.");
-
+      isDispensing = true;
       // Check if the response length is correct
       if (data.length == 15) {
 
@@ -514,7 +515,7 @@ class Communication {
     else  if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x13 && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x05
     ) {
       print("Dispensed, QR UTD here.");
-
+      isDispensing = false;
       // Check if the response length is correct
 
 
@@ -551,7 +552,7 @@ class Communication {
     ) {
       print("Dispensed, Cash UTD here.");
       isDispenseCash = true;
-
+      isDispensing = false;
       // Check if the response length is correct
       if (data.length == 28) {
 
@@ -784,7 +785,7 @@ class Communication {
 
 
 
-    const int maxRetries = 30; // Maximum retries
+    const int maxRetries = 15; // Maximum retries
     int retries = 0;
 
     // Retry until isCompleteDispense becomes true or retries exceed maxRetries
@@ -793,6 +794,7 @@ class Communication {
         // If isCompleteDispense becomes true, return 'Completed'
         isCompleteDispense = false; // Reset the flag for future operations
         isQr = false;
+        isDispensing = false;
         print('after result return $totalUtdQr');
         return Result(success: true, message: '0', utdQr: totalUtdQr);
       }
@@ -801,17 +803,23 @@ class Communication {
         isSoldOut = false;
         isCompleteDispense = false;
         isQr = false;
-
+        isDispensing = false;
         return Result(success: false, message: '1', utdQr: 0);
       }
 
+
       // Wait for the specified interval before retrying
       await Future.delayed(Duration(milliseconds: 2000));
-      retries++;
+      if (isDispensing) {
+        retries = 0;
+      } else {
+        retries++;
+      }
     }
 
 
     isQr = false;
+
     // If retries exceed maxRetries, return 'Failed'
     return Result(success: false, message: '2', utdQr : 0);
   }
