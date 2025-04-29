@@ -1,7 +1,7 @@
 mosquitto_sub -h mqtts://www.transpire.com.my -p 8883 -t "TQR000001" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key.pem"
 
 mosquitto_sub -h mqtts://transpireqr-api.transpire.com.my -p 8883 -t "/TQR/TQR000001" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"
-mosquitto_sub -h transpireqr-api.transpire.com.my -p 8883 -t "/TQR/TQR000001" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"
+mosquitto_sub -h transpireqr-api.transpire.com.my -p 8883 -t "/TQR/MDBT90269" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"
 
 mosquitto_sub -h transpireqr-api.transpire.com.my -p 8883 -t "/TSQR/TSQR00000" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"
 
@@ -9,4 +9,16 @@ mosquitto_sub -h transpireqr-api.transpire.com.my -p 8883 -t "/TSQR/TSQR00000" -
 mosquitto_sub -h tqrdnqr-api.transpire.com.my -p 8883 -t "/TQR/TQRD89999" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"
 
 
-mosquitto_sub -h www.transpire.com.my -p 8883 -t "/TSQR/TSQR00000" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"
+mosquitto_sub -h tqrdnqr-api.transpire.com.my -p 8883 -t "/TSQR/TSQR000001" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"
+
+mosquitto_sub -h transpireqr-api.transpire.com.my -p 8883 -t "/TSQR/TSQR000011" --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"
+
+send
+
+mosquitto_pub ^
+  -h transpireqr-api.transpire.com.my ^
+  -p 8883 ^
+  -t "/TSQR/TSQR000011" ^
+  -m "[{""commandcode":"TSQR_SetQRPayment","data":{"expirytime":"1745313722","devicecode":"TSQR000011","machine":"1","transactionid":"2827039410","holdvalue":"False","staticqrtransacitonno":"20250422TNGDMYNB030OQR77195642","ewallettypecode":"DUITNOW(TNGDMYNB)","injectcounter":"3"}},{"signature":"goAjn29ItecprUNa7CVWINLbqozQGZm0apCIwAHg94xPTtrMU1YGORweIO9M61xYuGSLfD0VN8t+qpG/a8L+y6QRHpkcwWHF2ARVrnM6H8CiPqh2FAPb1q02wfRxqvY3lppv4WSNZ3S0UAc0Tm/60b0CogIyhiYbxf/7waowYCoTgAUO3H4tcefuZ/imAd+ykScN06fpBQxL0iZ7fGqpIki+qjhzXA2T589bsYnSNM0MpHzu9Ez0HmLqBpwOSwLm4M54SMEuXLo2a5FnMFPjTzKDokTCQXeBzhyF/UC/4VG0JsueDaTufSj96Jg25Q2esODEcNSIuBRnEE3uGo1G/w==""}]" ^
+  --cafile "C:\Users\badru\StudioProjects\tbcc\assets\mqtt_key_local.crt"
+

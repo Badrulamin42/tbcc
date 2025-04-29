@@ -40,6 +40,7 @@ class Communication {
   int cashValue_ = 0;
   int CASHDispenseCounter_ = 0;
   bool isDispenseCash = false;
+  String hexString = '';
   List<int> sentreqcommand = [];
 
 
@@ -458,7 +459,7 @@ class Communication {
 
       if(isQr == false) {
 
-        myHomePageKey.currentState?.InsertCash('Failed', 0, 0, 0);
+        myHomePageKey.currentState?.InsertCash('Failed', 0, 0, 0, 0);
       }
       // Send the reply message
       _port!.write(resSoldOut2);
@@ -498,7 +499,7 @@ class Communication {
         //   }
 
         if(RemainingtoDispense > 0 && cashValue > 0){
-          myHomePageKey.currentState?.InsertCash('Dispensing', 0, 0, 0);
+          myHomePageKey.currentState?.InsertCash('Dispensing', 0, 0, 0, 0);
           isDispenseCash = true;
           cashValue_ = cashValue;
           print('cash dispensing true');
@@ -550,6 +551,7 @@ class Communication {
     //UTD cash
     else if (data.isNotEmpty && data[0] == 0xAA && data[1] == 0x19 && data[2] == 0x02 && data[3] == 0xD1 && data[4] == 0x06
     ) {
+      hexString = data.map((byte) => '0x${byte.toRadixString(16).padLeft(2, '0').toUpperCase()}').join(' ');
       print("Dispensed, Cash UTD here.");
       isDispenseCash = true;
       isDispensing = false;
@@ -589,8 +591,8 @@ class Communication {
             'OUT >>>: ${cashteldis.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
         if(CASHDispenseCounter > 0 && UTDCASHDispenseCounter > 0) {
           myHomePageKey.currentState?.InsertCash(
-              'Completed', UTDCASHCounter, CASHCounter,
-              CASHDispenseCounter);
+              'Completed', UTDCASHDispenseCounter, CASHCounter,
+              CASHDispenseCounter, UTDCASHCounter);
           isCompleteDispense = true;
 
           print('cash dispense complete true');

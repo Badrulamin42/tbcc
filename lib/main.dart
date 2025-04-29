@@ -17,6 +17,7 @@ import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:tbcc/utils/uart_service.dart';
 import 'package:usb_serial/usb_serial.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -30,6 +31,8 @@ import 'package:network_info_plus/network_info_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_usb/flutter_usb.dart';
 import 'package:open_file/open_file.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+
 
 const String appTag = "com.example.tbcc";
 
@@ -224,12 +227,15 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _downloading = false;
   String currentVersion = "";
   String key = "";
+  Color regularColor = Color(0xFFFEE902);
+  Color bonusColor = Color(0xFF4CAF50);
+  Color cashColor = Color(0xFFD32F2F);
   bool _antiSpamButton = false; // Flag to prevent spamming
   Timer? _reconnectTimer;
   bool _isDialogOpen = false; // Prevent multiple dialogs
   bool _isSetLatestRunning = false; // Prevent multiple dialogs
   BuildContext? _dialogContext; // Store dialog context to close later
-
+  String received = '';
   void onMqttConnected() {
     setState(() {
       mqttConnected = true;
@@ -354,10 +360,30 @@ class _MyHomePageState extends State<MyHomePage> {
     String? savedDeviceCode = prefs.getString('DeviceCode');
     String? savedSecretKey = prefs.getString('SecretKey');
     String? savedIVString = prefs.getString('IVString');
+    String? regularColorString = prefs.getString('RegularColor');
+    String? bonusColorString = prefs.getString('BonusColor');
+    String? cashColorString = prefs.getString('CashColor');
+
+    Color regularColorz = regularColorString != null
+        ? Color(int.parse(regularColorString, radix: 16))
+        : const Color(0xFFFEE902); // Default if null
+
+    Color bonusColorz = bonusColorString != null
+        ? Color(int.parse(bonusColorString, radix: 16))
+        : const Color(0xFFD32F2F); // Default if null
+
+    Color cashColorz = cashColorString != null
+        ? Color(int.parse(cashColorString, radix: 16))
+        : const Color(0xFF4CAF50); // Default if null
+
+
     List<dynamic> decodedBonusList = [];
     // Handle device code
 
     setState(() {
+      regularColor = regularColorz;
+      bonusColor = bonusColorz;
+      cashColor = cashColorz;
       deviceCode = savedDeviceCode ?? 'TQR000001';
       machineId = savedMachineID ?? 'A001';
       secretKey = savedSecretKey ?? r'C0F535771682';
@@ -730,7 +756,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _saveData() async {
     final prefs = await SharedPreferences.getInstance();
-
+    await prefs.setString('RegularColor', regularColor.value.toRadixString(16));
+    await prefs.setString('BonusColor', bonusColor.value.toRadixString(16));
+    await prefs.setString('CashColor', cashColor.value.toRadixString(16));
     // Convert all values to int explicitly
     List<Map<String, dynamic>> cleanedCoinPriceList = coinPriceList.map((item) {
       return {
@@ -1236,6 +1264,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       title: 'Regular',
                       list: tempCoinPriceList,
                       setState: setStateDialog,
+                      onColorChanged: (color) => setState(() => regularColor = color),
+                      sectionColor: regularColor,
                     ),
                     SizedBox(height: 20),
                     _buildListSection(
@@ -1243,6 +1273,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       list: tempCoinPriceListBonus,
                       setState: setStateDialog,
                       isBonus: true,
+                      onColorChanged: (color) => setState(() => bonusColor = color),
+                      sectionColor: bonusColor,
                     ),
                     SizedBox(height: 20),
                     _buildListSection(
@@ -1251,6 +1283,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       setState: setStateDialog,
                       isCash: true,
                       isBonus: true,
+                      onColorChanged: (color) => setState(() => cashColor = color),
+                      sectionColor: cashColor,
                     ),
                   ],
                 ),
@@ -1289,6 +1323,8 @@ class _MyHomePageState extends State<MyHomePage> {
     required StateSetter setState,
     bool isBonus = false,
     bool isCash = false,
+    required Color sectionColor,
+    required Function(Color) onColorChanged,
   }) {
     // Declare controllers and FocusNodes outside the build method to persist their state
     List<TextEditingController> coinsControllers = [];
@@ -1300,191 +1336,254 @@ class _MyHomePageState extends State<MyHomePage> {
     List<FocusNode?> bonusFocusNodes = [];
     List<FocusNode?> desFocusNodes = [];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: isBonus
-                ? Colors.green
-                : isCash
-                    ? Colors.orange
-                    : Colors.black,
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 12), // space between sections
+      padding: EdgeInsets.all(16), // space inside the box
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey, width: 1.5),
+        borderRadius: BorderRadius.circular(12), // rounded corners
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 6,
+            offset: Offset(0, 3),
           ),
-        ),
-        SizedBox(height: 10),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(list.length, (index) {
-            // Create controllers and FocusNodes only once to retain the state
-            if (coinsControllers.length <= index) {
-              coinsControllers.add(
-                  TextEditingController(text: list[index]['coins'].toString()));
-              priceControllers.add(
-                  TextEditingController(text: list[index]['price'].toString()));
-              bonusControllers.add(isBonus
-                  ? TextEditingController(text: list[index]['bonus'].toString())
-                  : null);
-              desControllers.add(
-                  TextEditingController(text: list[index]['desc'].toString()));
-
-              coinsFocusNodes.add(FocusNode());
-              priceFocusNodes.add(FocusNode());
-              bonusFocusNodes.add(isBonus ? FocusNode() : null);
-              desFocusNodes.add(FocusNode());
-            }
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          key: ValueKey(
-                              'coins_$index'), // Unique Key to preserve state
-                          controller: coinsControllers[index],
-                          focusNode: coinsFocusNodes[index],
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly
-                          ], // Restrict to digits only
-                          decoration: InputDecoration(labelText: 'Coins'),
-                          onChanged: (value) {
-                            int parsedValue = int.tryParse(value) ?? 0;
-                            list[index]['coins'] = parsedValue;
-                          },
-                          onEditingComplete: () {
-                            // Move focus to the next field after completion
-                            FocusScope.of(context)
-                                .requestFocus(priceFocusNodes[index]);
-                          },
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+          ),
+          Row(
+            children: [
+              IconButton(
+                icon: Icon(Icons.color_lens, color: sectionColor),
+                onPressed: () {
+                  Color tempColor = sectionColor;
+                  showDialog(
+                    context: context,
+                    builder: (context) {
+                      return AlertDialog(
+                        title: Text('Pick a color for $title'),
+                        content: SingleChildScrollView(
+                          child: ColorPicker(
+                            pickerColor: tempColor,
+                            onColorChanged: (Color color) {
+                              tempColor = color;
+                            },
+                          ),
                         ),
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          key: ValueKey('price_$index'),
-                          controller: priceControllers[index],
-                          focusNode: priceFocusNodes[index],
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly
-                          ],
-                          decoration: InputDecoration(labelText: 'Price'),
-                          onChanged: (value) {
-                            int parsedValue = int.tryParse(value) ?? 0;
-                            list[index]['price'] = parsedValue;
-                          },
-                          onEditingComplete: () {
-                            // Move focus to the next field after completion
-                            FocusScope.of(context).requestFocus(
-                                bonusFocusNodes[index] ??
-                                    coinsFocusNodes[index]);
-                          },
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.delete, color: Colors.red),
-                        onPressed: () {
-                          setState(() {
-                            list.removeAt(index);
-                            coinsControllers[index].dispose();
-                            priceControllers[index].dispose();
-                            bonusControllers[index]?.dispose();
-                            desControllers[index]?.dispose();
-                            coinsControllers.removeAt(index);
-                            priceControllers.removeAt(index);
-                            bonusControllers.removeAt(index);
-                            desControllers.removeAt(index);
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  if (isBonus && bonusControllers[index] != null) ...[
-                    SizedBox(height: 10),
-                    TextField(
-                      key: ValueKey(
-                          'bonus_$index'), // Unique Key to preserve state
-                      controller: bonusControllers[index],
-                      focusNode: bonusFocusNodes[index],
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly
-                      ], // Restrict to digits only
-                      decoration: InputDecoration(labelText: 'Bonus'),
-                      onChanged: (value) {
-                        // Directly parse the value to an integer
-                        int parsedValue = int.tryParse(value) ?? 0;
-                        list[index]['bonus'] = parsedValue;
-                      },
-                      onEditingComplete: () {
-                        // Move focus to the next field after completion
-                        FocusScope.of(context)
-                            .requestFocus(bonusFocusNodes[index]);
-                      },
-                    )
-                  ],
-                  if (isCash && isBonus) ...[
-                    SizedBox(height: 10),
-                    TextField(
-                      key: ValueKey(
-                          'desc_$index'), // Unique Key to preserve state
-                      controller: desControllers[index],
-                      onChanged: (value) {
-                        // Directly parse the value to an integer
-
-                        list[index]['desc'] = value;
-                      },
-                      maxLines:
-                          6, // Set to allow 5 lines of text (adjust as needed)
-                      decoration: InputDecoration(
-                        labelText: 'Enter Text',
-                        border: OutlineInputBorder(),
-                      ),
-                    )
-                  ],
-                ],
+                        actions: [
+                          TextButton(
+                            child: Text('Cancel'),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                          TextButton(
+                            child: Text('Reset to Default'),
+                            onPressed: () {
+                              setState(() {
+                                if (isBonus && isCash) {
+                                  tempColor = const Color(0xFFD32F2F);
+                                } else if (!isCash && isBonus) {
+                                  tempColor = const Color(0xFF4CAF50);
+                                } else if (!isCash && !isBonus) {
+                                  tempColor = const Color(0xFFFEE902);
+                                }
+                                onColorChanged(tempColor);
+                              });
+                              Navigator.of(context).pop();
+                            },
+                          ),
+                          TextButton(
+                            child: Text('Select'),
+                            onPressed: () {
+                              onColorChanged(tempColor);
+                              setState(() {});
+                              Navigator.of(context).pop();
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
               ),
-            );
-          }),
-        ),
-        SizedBox(height: 10),
-        TextButton(
-          onPressed: () {
-            setState(() {
-              list.add({
-                'coins': 0,
-                'price': 0,
-                if (isBonus) 'bonus': 0,
-              });
-              coinsControllers.add(TextEditingController(text: '0'));
-              priceControllers.add(TextEditingController(text: '0'));
-              desControllers.add(TextEditingController(text: ''));
-              if (isBonus) {
-                bonusControllers.add(TextEditingController(text: '0'));
-              } else {
-                bonusControllers.add(null);
-              }
-              coinsFocusNodes.add(FocusNode());
-              priceFocusNodes.add(FocusNode());
-              desFocusNodes.add(FocusNode());
-              bonusFocusNodes.add(isBonus ? FocusNode() : null);
-            });
-          },
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [Icon(Icons.add), Text(" Add $title")],
+              Text(
+                'Change Color',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
+          SizedBox(height: 10),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(list.length, (index) {
+              if (coinsControllers.length <= index) {
+                coinsControllers.add(
+                    TextEditingController(text: list[index]['coins'].toString()));
+                priceControllers.add(
+                    TextEditingController(text: list[index]['price'].toString()));
+                bonusControllers.add(isBonus
+                    ? TextEditingController(text: list[index]['bonus'].toString())
+                    : null);
+                desControllers.add(
+                    TextEditingController(text: list[index]['desc'].toString()));
+                coinsFocusNodes.add(FocusNode());
+                priceFocusNodes.add(FocusNode());
+                bonusFocusNodes.add(isBonus ? FocusNode() : null);
+                desFocusNodes.add(FocusNode());
+              }
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            key: ValueKey('coins_$index'),
+                            controller: coinsControllers[index],
+                            focusNode: coinsFocusNodes[index],
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            decoration: InputDecoration(labelText: 'Coins'),
+                            onChanged: (value) {
+                              int parsedValue = int.tryParse(value) ?? 0;
+                              list[index]['coins'] = parsedValue;
+                            },
+                            onEditingComplete: () {
+                              FocusScope.of(context)
+                                  .requestFocus(priceFocusNodes[index]);
+                            },
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            key: ValueKey('price_$index'),
+                            controller: priceControllers[index],
+                            focusNode: priceFocusNodes[index],
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            decoration: InputDecoration(labelText: 'Price'),
+                            onChanged: (value) {
+                              int parsedValue = int.tryParse(value) ?? 0;
+                              list[index]['price'] = parsedValue;
+                            },
+                            onEditingComplete: () {
+                              FocusScope.of(context).requestFocus(
+                                  bonusFocusNodes[index] ?? coinsFocusNodes[index]);
+                            },
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.delete, color: Colors.red),
+                          onPressed: () {
+                            setState(() {
+                              list.removeAt(index);
+                              coinsControllers[index].dispose();
+                              priceControllers[index].dispose();
+                              bonusControllers[index]?.dispose();
+                              desControllers[index]?.dispose();
+                              coinsControllers.removeAt(index);
+                              priceControllers.removeAt(index);
+                              bonusControllers.removeAt(index);
+                              desControllers.removeAt(index);
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    if (isBonus && bonusControllers[index] != null) ...[
+                      SizedBox(height: 10),
+                      TextField(
+                        key: ValueKey('bonus_$index'),
+                        controller: bonusControllers[index],
+                        focusNode: bonusFocusNodes[index],
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        decoration: InputDecoration(labelText: 'Bonus'),
+                        onChanged: (value) {
+                          int parsedValue = int.tryParse(value) ?? 0;
+                          list[index]['bonus'] = parsedValue;
+                        },
+                        onEditingComplete: () {
+                          FocusScope.of(context)
+                              .requestFocus(bonusFocusNodes[index]);
+                        },
+                      )
+                    ],
+                    if (isCash && isBonus) ...[
+                      SizedBox(height: 10),
+                      TextField(
+                        key: ValueKey('desc_$index'),
+                        controller: desControllers[index],
+                        onChanged: (value) {
+                          list[index]['desc'] = value;
+                        },
+                        maxLines: 6,
+                        decoration: InputDecoration(
+                          labelText: 'Enter Text',
+                          border: OutlineInputBorder(),
+                        ),
+                      )
+                    ],
+                  ],
+                ),
+              );
+            }),
+          ),
+          SizedBox(height: 10),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                list.add({
+                  'coins': 0,
+                  'price': 0,
+                  if (isBonus) 'bonus': 0,
+                });
+                coinsControllers.add(TextEditingController(text: '0'));
+                priceControllers.add(TextEditingController(text: '0'));
+                desControllers.add(TextEditingController(text: ''));
+                if (isBonus) {
+                  bonusControllers.add(TextEditingController(text: '0'));
+                } else {
+                  bonusControllers.add(null);
+                }
+                coinsFocusNodes.add(FocusNode());
+                priceFocusNodes.add(FocusNode());
+                desFocusNodes.add(FocusNode());
+                bonusFocusNodes.add(isBonus ? FocusNode() : null);
+              });
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [Icon(Icons.add), Text(" Add $title")],
+            ),
+          ),
+        ],
+      ),
     );
   }
+
 
   // Delete an item
   void _deleteItem(int index) {
@@ -1816,7 +1915,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void InsertCash(
-      String status, int UtdCash, int CashCounter, int cashValue_) async {
+      String status, int UtdCash, int CashCounter, int cashValue_, int UTDCASHCounter) async {
     print('insertcash being called');
     if (status == 'Dispensing') {
       setState(() {
@@ -1855,14 +1954,15 @@ class _MyHomePageState extends State<MyHomePage> {
           {
             "statusstarttime": getFormattedDateTime(),
             "utdcounter": UtdCash.toString(),
-            "cashcounter": CashCounter.toString(),
+            "cashcounter": UTDCASHCounter.toString(),
             "utdCoinTube": "0.00",
             "coinTubeCounter": "0.00",
             "utdCoinBox": "0.00",
             "coinBoxCounter": "0.00",
             "amount": cashValue_.toString(),
             "slot": "5",
-            "rssi": "-99"
+            "rssi": "-99",
+            "EWalletQRCode": communication.hexString
           }
         ]
       };
@@ -2098,6 +2198,13 @@ class _MyHomePageState extends State<MyHomePage> {
     mqttConn(); // call mqtt
     initConnectivity();
     _reconnectTimer?.cancel();
+
+    // UartService.uartStream.listen((data) {
+    //   print("data uart $data");
+    //   setState(() {
+    //     received = data;
+    //   });
+    // });
 
     _reconnectTimer = Timer.periodic(Duration(seconds: 10), (timer) {
       initConnectivity();
@@ -2608,6 +2715,22 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> cancelFetchTRX(String errorMsg) async {
+      String statustype = "";
+      if(errorMsg == "Timeout")
+        {
+          statustype = "Payment";
+        }
+      else if(errorMsg == "Qr timeout")
+        {
+          statustype = "Submit";
+        }
+      else if (errorMsg == "User Cancelled")
+        {
+          statustype = "Submit";
+        }
+      else{
+        statustype = "Submit";
+      }
 
       final privateKeyPem = await loadPrivateKey();
       final payloadcanceltrx = {
@@ -2617,7 +2740,7 @@ class _MyHomePageState extends State<MyHomePage> {
           {
             "statusstarttime": getFormattedDateTime(),
             "machineid": machineId,
-            "status": "Payment",
+            "status": statustype,
             "eutdcounter": selectedAmount,
             "eamount": selectedAmount,
             "eoriginalamount": selectedAmount,
@@ -3669,10 +3792,10 @@ class _MyHomePageState extends State<MyHomePage> {
         style: ElevatedButton.styleFrom(
           minimumSize: Size(275, 200),
           backgroundColor: isSpecialOffer
-              ? Color(0xFFD32F2F)
+              ? bonusColor
               : isCashOffer
-                  ? Color(0xFF4CAF50)
-                  : Color(0xFFFEE902),
+                  ? cashColor
+                  : regularColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
