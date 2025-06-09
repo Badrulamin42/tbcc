@@ -2125,7 +2125,7 @@ class _MyHomePageState extends State<MyHomePage> {
       ]
     };
 
-    if (resultdis) {
+    if (resultdis || amounttodis == 0) {
       setState(() {
         FailedDispense = false;
         ClosingCall = false;
