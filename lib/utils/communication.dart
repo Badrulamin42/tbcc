@@ -34,6 +34,7 @@ class Communication {
   bool isCompleteDispense = false;
   bool isDispensing = false;
   int dispenseAmount = 0;
+  int RemainingtoDispenseG = 9999;
   int totalUtdQr= 0;
   int UtdCash = 0;
   int CashCounter = 0;
@@ -489,6 +490,8 @@ class Communication {
         print("Cash Value: $cashValue");
         print("Total Needed to Dispense: $totalNeeded");
         print("Remaining to Dispense: $RemainingtoDispense");
+
+        RemainingtoDispenseG = RemainingtoDispense;
         // Send the reply message
         _port!.write(dispensing);
         print(
@@ -792,11 +795,16 @@ class Communication {
 
     // Retry until isCompleteDispense becomes true or retries exceed maxRetries
     while (retries < maxRetries) {
+      if(RemainingtoDispenseG == 0)
+        {
+          isCompleteDispense = true;
+        }
       if (isCompleteDispense) {
         // If isCompleteDispense becomes true, return 'Completed'
         isCompleteDispense = false; // Reset the flag for future operations
         isQr = false;
         isDispensing = false;
+        RemainingtoDispenseG = 9999;
         print('after result return $totalUtdQr');
         return Result(success: true, message: '0', utdQr: totalUtdQr);
       }
@@ -806,6 +814,7 @@ class Communication {
         isCompleteDispense = false;
         isQr = false;
         isDispensing = false;
+        RemainingtoDispenseG = 9999;
         return Result(success: false, message: '1', utdQr: 0);
       }
 
@@ -823,7 +832,7 @@ class Communication {
     isQr = false;
 
     // If retries exceed maxRetries, return 'Failed'
-    return Result(success: false, message: '2', utdQr : 0);
+    return Result(success: false, message: isDispensing ? '3' : '2', utdQr : 0);
   }
 
   //help & reply generator

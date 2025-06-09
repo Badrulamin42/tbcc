@@ -2648,10 +2648,13 @@ class _MyHomePageState extends State<MyHomePage> {
           Errormsg = 'Token is out of Stock';
           saveSoldout(true);
           // isMachineFaulty = true;
-        } else {
+        } else if(result.message == '2') {
 
           Errormsg = 'Timeout';
           cancelFetchTRX("Timeout");
+        }
+        else{
+          Errormsg = 'Timeout';
         }
       });
 
