@@ -831,6 +831,7 @@ class Communication {
     isQr = false;
 
     // If retries exceed maxRetries, return 'Failed'
+    // message: 2 is refund , 3 no refund
     return Result(success: false, message: isDispensing ? '3' : '2', utdQr : 0);
   }
 

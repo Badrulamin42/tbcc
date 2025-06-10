@@ -321,7 +321,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void _setDefaultCoinPriceListBonus() {
     setState(() {
       coinPriceListBonus = [
-        {'coins': 200, 'price': 200, 'bonus': 0},
+        {'coins': 200, 'price': 200, 'bonus': 0, 'promoTitle': "🔥 Promotion! 🔥", 'promoText': "Pay at the counter only!"},
       ];
     });
   }
@@ -330,7 +330,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void _setDefaultCoinPriceListNonQr() {
     setState(() {
       coinPriceListNonQr = [
-        {'coins': 200, 'price': 200, 'bonus': 0, 'desc': "FREE CARTON PEPSI"},
+        {'coins': 200, 'price': 200, 'bonus': 0, 'desc': "FREE CARTON PEPSI", 'cashPromoTitle': "🔥 Promotion! 🔥", 'cashPromoText': "Pay at the counter only!"},
       ];
     });
   }
@@ -419,7 +419,9 @@ class _MyHomePageState extends State<MyHomePage> {
       try {
         List<dynamic> decodedBonusList = jsonDecode(savedDataBonus);
         setState(() {
-          coinPriceListBonus = decodedBonusList.map<Map<String, int>>((item) {
+          coinPriceListBonus = decodedBonusList.map<Map<String, dynamic>>((item) {
+            final promoTitle = item['promoTitle']?.toString()?.trim();
+
             return {
               'coins': (item['coins'] is int)
                   ? item['coins']
@@ -430,6 +432,9 @@ class _MyHomePageState extends State<MyHomePage> {
               'bonus': (item['bonus'] is int)
                   ? item['bonus']
                   : int.tryParse(item['bonus'].toString()) ?? 0,
+              'promoTitle': (promoTitle?.isNotEmpty ?? false)
+                  ? promoTitle
+                  : '🔥 Promotion! 🔥',
             };
           }).toList();
         });
@@ -447,6 +452,9 @@ class _MyHomePageState extends State<MyHomePage> {
         setState(() {
           coinPriceListNonQr =
               decodedBonusList.map<Map<String, dynamic>>((item) {
+                final cashPromoTitle = item['cashPromoTitle']?.toString()?.trim();
+                final cashPromoText = item['cashPromoText']?.toString()?.trim();
+
             return {
               'coins': (item['coins'] is int)
                   ? item['coins']
@@ -458,7 +466,14 @@ class _MyHomePageState extends State<MyHomePage> {
                   ? item['bonus']
                   : int.tryParse(item['bonus'].toString()) ?? 0,
               'desc':
-                  item['desc']?.toString() ?? '' // Ensure it's always a string
+                  item['desc']?.toString() ?? '',
+              'cashPromoTitle': (cashPromoTitle?.isNotEmpty ?? false)
+                  ? cashPromoTitle
+                  : '🔥 Promotion! 🔥',
+              'cashPromoText': (cashPromoText?.isNotEmpty ?? false)
+                  ? cashPromoText
+                  : 'Pay at the counter only!',
+
             };
           }).toList();
         });
@@ -782,6 +797,7 @@ class _MyHomePageState extends State<MyHomePage> {
         'bonus': (item['bonus'] is int)
             ? item['bonus']
             : int.tryParse(item['bonus'].toString()) ?? 0,
+        'promoTitle': item['promoTitle'],
       };
     }).toList();
 
@@ -797,7 +813,9 @@ class _MyHomePageState extends State<MyHomePage> {
         'bonus': (item['bonus'] is int)
             ? item['bonus']
             : int.tryParse(item['bonus'].toString()) ?? 0,
-        'desc': item['desc']
+        'desc': item['desc'],
+        'cashPromoTitle': item['cashPromoTitle'],
+        'cashPromoText': item['cashPromoText']
       };
     }).toList();
 
@@ -1330,13 +1348,19 @@ class _MyHomePageState extends State<MyHomePage> {
     List<TextEditingController> priceControllers = [];
     List<TextEditingController?> bonusControllers = [];
     List<TextEditingController?> desControllers = [];
+    List<TextEditingController?> promoTitleControllers = [];
+    List<TextEditingController?> cashPromoTitleControllers = [];
+    List<TextEditingController?> cashPromoTextControllers = [];
     List<FocusNode> coinsFocusNodes = [];
     List<FocusNode> priceFocusNodes = [];
     List<FocusNode?> bonusFocusNodes = [];
     List<FocusNode?> desFocusNodes = [];
+    List<FocusNode?> promoTitleFocusNodes = [];
+    List<FocusNode?> cashPromoTitleFocusNodes = [];
+    List<FocusNode?> cashPromoTextFocusNodes = [];
 
     return Container(
-      margin: EdgeInsets.symmetric(vertical: 12), // space between sections
+      margin: EdgeInsets.symmetric(vertical: 0), // space between sections
       padding: EdgeInsets.all(16), // space inside the box
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1438,10 +1462,24 @@ class _MyHomePageState extends State<MyHomePage> {
                     : null);
                 desControllers.add(
                     TextEditingController(text: list[index]['desc'].toString()));
+
+                promoTitleControllers.add(
+                    TextEditingController(text: list[index]['promoTitle'].toString()));
+
+                cashPromoTitleControllers.add(
+                    TextEditingController(text: list[index]['cashPromoTitle'].toString()));
+
+                cashPromoTextControllers.add(
+                    TextEditingController(text: list[index]['cashPromoText'].toString()));
+
+
                 coinsFocusNodes.add(FocusNode());
                 priceFocusNodes.add(FocusNode());
                 bonusFocusNodes.add(isBonus ? FocusNode() : null);
                 desFocusNodes.add(FocusNode());
+                promoTitleFocusNodes.add(FocusNode());
+                cashPromoTitleFocusNodes.add(FocusNode());
+                cashPromoTextFocusNodes.add(FocusNode());
               }
 
               return Padding(
@@ -1500,10 +1538,16 @@ class _MyHomePageState extends State<MyHomePage> {
                               priceControllers[index].dispose();
                               bonusControllers[index]?.dispose();
                               desControllers[index]?.dispose();
+                              cashPromoTitleControllers[index]?.dispose();
+                              cashPromoTextControllers[index]?.dispose();
+                              promoTitleControllers[index]?.dispose();
                               coinsControllers.removeAt(index);
                               priceControllers.removeAt(index);
                               bonusControllers.removeAt(index);
                               desControllers.removeAt(index);
+                              cashPromoTitleControllers.removeAt(index);
+                              cashPromoTextControllers.removeAt(index);
+                              promoTitleControllers.removeAt(index);
                             });
                           },
                         ),
@@ -1530,7 +1574,48 @@ class _MyHomePageState extends State<MyHomePage> {
                         },
                       )
                     ],
+                    if (!isCash && isBonus) ...[
+                      SizedBox(height: 10),
+                      TextField(
+                        key: ValueKey('ptitle_$index'),
+                        controller: promoTitleControllers[index],
+                        onChanged: (value) {
+                          list[index]['promoTitle'] = value;
+                        },
+                        maxLines: 1,
+                        decoration: InputDecoration(
+                          labelText: 'Title',
+                          border: OutlineInputBorder(),
+                        ),
+                      )
+                    ],
                     if (isCash && isBonus) ...[
+                      SizedBox(height: 10),
+                      TextField(
+                        key: ValueKey('ctitle_$index'),
+                        controller: cashPromoTitleControllers[index],
+                        onChanged: (value) {
+                          list[index]['cashPromoTitle'] = value;
+                        },
+                        maxLines: 1,
+                        decoration: InputDecoration(
+                          labelText: 'Title',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      TextField(
+                        key: ValueKey('cpt_$index'),
+                        controller: cashPromoTextControllers[index],
+                        onChanged: (value) {
+                          list[index]['cashPromoText'] = value;
+                        },
+                        maxLines: 1,
+                        decoration: InputDecoration(
+                          labelText: 'First Description',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
                       SizedBox(height: 10),
                       TextField(
                         key: ValueKey('desc_$index'),
@@ -1540,7 +1625,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         },
                         maxLines: 6,
                         decoration: InputDecoration(
-                          labelText: 'Enter Text',
+                          labelText: 'Second Description',
                           border: OutlineInputBorder(),
                         ),
                       )
@@ -1581,34 +1666,6 @@ class _MyHomePageState extends State<MyHomePage> {
         ],
       ),
     );
-  }
-
-
-  // Delete an item
-  void _deleteItem(int index) {
-    setState(() {
-      coinPriceList.removeAt(index);
-    });
-    _saveData();
-  }
-
-  // Add a new entry
-  void _addNewEntry() async {
-    // Add new entry
-    coinPriceList.add({'coins': 0, 'price': 0});
-    // Default values
-
-    // Save the data and reload asynchronously without blocking UI updates
-    _saveData().then((_) => _loadSavedText());
-  }
-
-  // Clear all stored data
-  Future<void> _clearData() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('coinPriceList');
-    setState(() {
-      coinPriceList.clear();
-    });
   }
 
   void remainingToDispense(int remaining) async {
@@ -3761,6 +3818,9 @@ class _MyHomePageState extends State<MyHomePage> {
     required BuildContext context,
     required int coins,
     required String amount,
+    String? cashPromoTitle,
+    String? cashPromoText,
+    String? promoTitle,
     String? description,
     required bool isSpecialOffer,
     required bool isCashOffer,
@@ -3812,7 +3872,7 @@ class _MyHomePageState extends State<MyHomePage> {
             children: [
               if (isSpecialOffer) ...[
                 TextSpan(
-                  text: '🔥 Promotion! 🔥\n',
+                  text: '$promoTitle\n',
                   style: TextStyle(
                     fontSize: 40,
                     fontWeight: FontWeight.bold,
@@ -3822,7 +3882,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ],
               if (isCashOffer) ...[
                 TextSpan(
-                  text: '🔥 Promotion! 🔥\n Pay at the counter only!\n',
+                  text:  '$cashPromoTitle\n$cashPromoText\n',
                   style: TextStyle(
                     fontSize: 40,
                     fontWeight: FontWeight.bold,
@@ -3998,6 +4058,8 @@ class _MyHomePageState extends State<MyHomePage> {
                           isSpecialOffer: true, // Apply special offer style
                           isCashOffer: false,
                           bonus: item['bonus'], // Pass the bonus value
+                          promoTitle: item['promoTitle'],
+
                         );
                       }).toList(),
                     ],
@@ -4021,6 +4083,8 @@ class _MyHomePageState extends State<MyHomePage> {
                             isSpecialOffer: false, // Apply special offer style
                             isCashOffer: true,
                             bonus: item['bonus'], // Pass the bonus value
+                            cashPromoTitle: item['cashPromoTitle'],
+                            cashPromoText: item['cashPromoText'],
                             description: item['desc']);
                       }).toList(),
                     ),
