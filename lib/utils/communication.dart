@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:async';
-import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'package:flutter_usb/flutter_usb.dart';
 import 'package:usb_serial/usb_serial.dart';
 import '../main.dart';
@@ -27,7 +26,7 @@ class Communication {
   UsbPort? _port;
   final String portName = Platform.isAndroid ? '/dev/ttyS3' : 'COM5';
 
-  late SerialPort port;
+
   bool isConnected = false;
   bool isQr = false;
   bool isSoldOut = false;
@@ -790,7 +789,7 @@ class Communication {
 
 
 
-    const int maxRetries = 15; // Maximum retries
+    const int maxRetries = 30; // Maximum retries
     int retries = 0;
 
     // Retry until isCompleteDispense becomes true or retries exceed maxRetries
@@ -820,7 +819,7 @@ class Communication {
 
 
       // Wait for the specified interval before retrying
-      await Future.delayed(Duration(milliseconds: 2000));
+      await Future.delayed(Duration(milliseconds: 1000));
       if (isDispensing) {
         retries = 0;
       } else {

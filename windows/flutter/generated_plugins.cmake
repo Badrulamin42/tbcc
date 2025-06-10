@@ -4,7 +4,6 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   connectivity_plus
-  flutter_libserialport
   flutter_usb
   permission_handler_windows
 )

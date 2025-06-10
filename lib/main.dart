@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:convert'; // For JSON encoding/decoding
@@ -17,7 +16,6 @@ import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:tbcc/utils/uart_service.dart';
 import 'package:usb_serial/usb_serial.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -88,6 +86,8 @@ class MyApp extends StatelessWidget {
 }
 
 class LoadingPage extends StatefulWidget {
+  const LoadingPage({super.key});
+
   @override
   _LoadingPageState createState() => _LoadingPageState();
 }
@@ -203,7 +203,6 @@ class _MyHomePageState extends State<MyHomePage> {
   String _savedText = ''; // Variable to store the saved text
   bool isDeviceFaulty = false;
   String injectAmountstr = '0.00';
-  List<ConnectivityResult> _connectionStatus = [ConnectivityResult.none];
   final Connectivity _connectivity = Connectivity();
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
   List<Map<String, dynamic>> coinPriceList = [];
@@ -2785,7 +2784,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   content: Text(
                       "Refund request successfully sent ✅. Processing time may vary—please check your e-wallet within 24 hours."
                   ),
-                  duration: Duration(minutes: 5), // Set duration to 5 minutes
+                  duration: Duration(seconds: 6), // Set duration to 5 minutes
                 ),
               );
             }
