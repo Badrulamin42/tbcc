@@ -756,7 +756,7 @@ class Communication {
   // Main function to control the flow of communication
   Future<Result> main(int command) async {
     isQr = true;
-
+    isDispensing = false;
     Uint8List requestDispense = Uint8List.fromList([
       0xAA,
       0x0A,

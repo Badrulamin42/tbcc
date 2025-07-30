@@ -1,8 +1,12 @@
-import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:http/http.dart' as http;
 import 'dart:convert'; // For JSON encoding/decoding
+import 'dart:io';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:dio/dio.dart';
+import 'package:encrypt/encrypt.dart' as encrypt;
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show
         FilteringTextInputFormatter,
@@ -12,25 +16,21 @@ import 'package:flutter/services.dart'
         TextInputFormatter,
         Uint8List,
         rootBundle;
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:network_info_plus/network_info_plus.dart';
+import 'package:open_file/open_file.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:usb_serial/usb_serial.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:usb_serial/usb_serial.dart';
 
 import 'utils//RSA.dart'; // Import the signature utility file
-import 'package:encrypt/encrypt.dart' as encrypt;
-import 'dart:io';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'utils/mqtt_service.dart'; // Import the MQTT service class
 import 'utils/communication.dart';
-import 'package:network_info_plus/network_info_plus.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter_usb/flutter_usb.dart';
-import 'package:open_file/open_file.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
-
+import 'utils/mqtt_service.dart'; // Import the MQTT service class
 
 const String appTag = "com.example.tbcc";
 
@@ -195,6 +195,7 @@ class _MyHomePageState extends State<MyHomePage> {
   String ErrormsgConn = '';
   String ErrormsgInitConn = '';
   List<UsbDevice> myStringArray = [];
+  String _backgroundImagePath = 'assets/images/bg.jpg';
   UsbDevice?
       selectedPort; // Declare it inside the method, ensuring it's not null
   bool isConnected = true;
@@ -235,9 +236,151 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isSetLatestRunning = false; // Prevent multiple dialogs
   BuildContext? _dialogContext; // Store dialog context to close later
   String received = '';
+  String _selectedImagePath = '';
+  double _dragOffset = 0.0;
+  double _backgroundOffsetY = 0.0;
+
+  List<String> presetKeys = [
+    'background_slot_1',
+    'background_slot_2',
+    'background_slot_3',
+    'background_slot_4',
+    'background_slot_5',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    List<UsbDevice> devices = [];
+    UsbDevice? _device;
+    UsbPort? _port;
+
+    setState(() {
+      isLoadingboot = true;
+    });
+    print('initState called');
+    loadSoldoutStatus();
+    mqttConn(); // call mqtt
+    initConnectivity();
+    _reconnectTimer?.cancel();
+
+    // UartService.uartStream.listen((data) {
+    //   print("data uart $data");
+    //   setState(() {
+    //     received = data;
+    //   });
+    // });
+
+    _reconnectTimer = Timer.periodic(Duration(seconds: 10), (timer) {
+      initConnectivity();
+    });
+
+    Future.delayed(Duration(seconds: 3), () {
+      _getMacAddress();
+      getKey();
+    });
+
+    _connectivitySubscription =
+        _connectivity.onConnectivityChanged.listen(_updateConnectionStatus);
+    // final portName = ''; // 'COM5';
+    // const platform = MethodChannel('com.example.serialport');
+    // Wrap the code in a try-catch block to handle errors
+
+    _loadSavedText(); // Load the saved text when the app starts
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // //testing
+      // await saveFailedTrx("test123" , "10.00", "1000" );
+      // await clearFailedTrx();
+      final packageInfo = await PackageInfo.fromPlatform();
+      setState(() {
+        currentVersion = packageInfo.version;
+      });
+      // final prefs = await SharedPreferences.getInstance();
+      // await prefs.remove('isLatestSoldout');
+      // await prefs.remove('isLatestQR');
+      // await prefs.remove('latestCashValue');
+      print('test get trx failed ');
+      List transactions = await getFailedTrx(); // Await the function call
+      print(transactions); // Print the result
+
+      try {
+        communication =
+            await Communication(null); // Ensure async initialization
+
+        await Future.delayed(Duration(seconds: 3), () {
+          if (communication!.isConnected == false) {
+            print("Error opening port");
+
+            // setState(() {
+            //   ErrormsgInitConn = "Error opening port";
+            // });
+            _showErrorDialog();
+            setState(() {
+              isLoadingboot = false;
+            });
+          } else {
+            _snackBar('Port Connected');
+          }
+        });
+      } catch (e) {
+        setState(() {
+          isLoadingboot = false;
+        });
+        print("Error opening port: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error opening port: $e")),
+        );
+
+        _showErrorDialog();
+
+        setState(() {
+          ErrormsgInitConn = e.toString();
+        });
+      }
+
+      devices = await UsbSerial.listDevices();
+      setState(() {
+        myStringArray.addAll(devices); // Use addAll directly
+      });
+      setState(() {
+        isLoadingboot = false;
+      });
+    });
+  }
+
   void onMqttConnected() {
     setState(() {
       mqttConnected = true;
+    });
+  }
+
+  Future<void> _uploadCustomImage(BuildContext context) async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+    );
+
+    if (result != null && result.files.single.path != null) {
+      String filePath = result.files.single.path!;
+      _setBackground(filePath);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Custom background set!'),
+      ));
+    } else {
+      // User canceled the picker
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('No image selected.'),
+      ));
+    }
+  }
+
+  void _setBackground(String path, {double offsetY = 0.0}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('background_image', path);
+    await prefs.setDouble('background_offset_y', offsetY);
+
+    setState(() {
+      _backgroundImagePath = path;
+      _backgroundOffsetY = offsetY;
     });
   }
 
@@ -321,7 +464,13 @@ class _MyHomePageState extends State<MyHomePage> {
   void _setDefaultCoinPriceListBonus() {
     setState(() {
       coinPriceListBonus = [
-        {'coins': 200, 'price': 200, 'bonus': 0, 'promoTitle': "🔥 Promotion! 🔥", 'promoText': "Pay at the counter only!"},
+        {
+          'coins': 200,
+          'price': 200,
+          'bonus': 0,
+          'promoTitle': "🔥 Promotion! 🔥",
+          'promoText': "Pay at the counter only!"
+        },
       ];
     });
   }
@@ -330,7 +479,14 @@ class _MyHomePageState extends State<MyHomePage> {
   void _setDefaultCoinPriceListNonQr() {
     setState(() {
       coinPriceListNonQr = [
-        {'coins': 200, 'price': 200, 'bonus': 0, 'desc': "FREE CARTON PEPSI", 'cashPromoTitle': "🔥 Promotion! 🔥", 'cashPromoText': "Pay at the counter only!"},
+        {
+          'coins': 200,
+          'price': 200,
+          'bonus': 0,
+          'desc': "FREE CARTON PEPSI",
+          'cashPromoTitle': "🔥 Promotion! 🔥",
+          'cashPromoText': "Pay at the counter only!"
+        },
       ];
     });
   }
@@ -375,7 +531,6 @@ class _MyHomePageState extends State<MyHomePage> {
         ? Color(int.parse(cashColorString, radix: 16))
         : const Color(0xFF4CAF50); // Default if null
 
-
     List<dynamic> decodedBonusList = [];
     // Handle device code
 
@@ -419,7 +574,8 @@ class _MyHomePageState extends State<MyHomePage> {
       try {
         List<dynamic> decodedBonusList = jsonDecode(savedDataBonus);
         setState(() {
-          coinPriceListBonus = decodedBonusList.map<Map<String, dynamic>>((item) {
+          coinPriceListBonus =
+              decodedBonusList.map<Map<String, dynamic>>((item) {
             final promoTitle = item['promoTitle']?.toString()?.trim();
 
             return {
@@ -452,8 +608,8 @@ class _MyHomePageState extends State<MyHomePage> {
         setState(() {
           coinPriceListNonQr =
               decodedBonusList.map<Map<String, dynamic>>((item) {
-                final cashPromoTitle = item['cashPromoTitle']?.toString()?.trim();
-                final cashPromoText = item['cashPromoText']?.toString()?.trim();
+            final cashPromoTitle = item['cashPromoTitle']?.toString()?.trim();
+            final cashPromoText = item['cashPromoText']?.toString()?.trim();
 
             return {
               'coins': (item['coins'] is int)
@@ -465,15 +621,13 @@ class _MyHomePageState extends State<MyHomePage> {
               'bonus': (item['bonus'] is int)
                   ? item['bonus']
                   : int.tryParse(item['bonus'].toString()) ?? 0,
-              'desc':
-                  item['desc']?.toString() ?? '',
+              'desc': item['desc']?.toString() ?? '',
               'cashPromoTitle': (cashPromoTitle?.isNotEmpty ?? false)
                   ? cashPromoTitle
                   : '🔥 Promotion! 🔥',
               'cashPromoText': (cashPromoText?.isNotEmpty ?? false)
                   ? cashPromoText
                   : 'Pay at the counter only!',
-
             };
           }).toList();
         });
@@ -509,34 +663,32 @@ class _MyHomePageState extends State<MyHomePage> {
       _savedText = text;
     });
   }
+
   void toggleLoadingDialog(BuildContext context, bool isLoading) {
     // Show the loading dialog first
     if (isLoading == true) {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) =>
-            AlertDialog(
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  const Text("Loading..."),
-                ],
-              ),
-            ),
+        builder: (context) => AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text("Loading..."),
+            ],
+          ),
+        ),
       );
-    }
-    else  {
+    } else {
       if (Navigator.canPop(context)) {
         Navigator.pop(context);
       }
     }
   }
+
   Future<void> checkForUpdate(BuildContext context) async {
-
-
     setState(() {
       isGeneralLoading = true;
       _antiSpamButton = true; // Set flag to true
@@ -828,27 +980,25 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> initConnectivity() async {
+    late List<ConnectivityResult> result;
+    // Platform messages may fail, so we use a try/catch PlatformException.
+    try {
+      result = await _connectivity.checkConnectivity();
+      print('internet : $result');
+    } on PlatformException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Couldn\'t check connectivity status: $e')),
+      );
+      return;
+    }
 
-       late List<ConnectivityResult> result;
-      // Platform messages may fail, so we use a try/catch PlatformException.
-      try {
-        result = await _connectivity.checkConnectivity();
-        print('internet : $result');
-      } on PlatformException catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Couldn\'t check connectivity status: $e')),
-        );
-        return;
-      }
+    // If the widget was removed from the tree while the asynchronous platform
+    // message was in flight, discard the reply.
+    if (!mounted) {
+      return Future.value(null);
+    }
 
-      // If the widget was removed from the tree while the asynchronous platform
-      // message was in flight, discard the reply.
-      if (!mounted) {
-        return Future.value(null);
-      }
-
-      return _updateConnectionStatus(result);
-
+    return _updateConnectionStatus(result);
   }
 
   Future<void> getKey() async {
@@ -929,8 +1079,7 @@ class _MyHomePageState extends State<MyHomePage> {
         setState(() {
           isConnected = hasInternet; // Update connection status
         });
-      }
-      else{
+      } else {
         setState(() {
           isConnected = false; // Update connection status
         });
@@ -1281,7 +1430,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       title: 'Regular',
                       list: tempCoinPriceList,
                       setState: setStateDialog,
-                      onColorChanged: (color) => setState(() => regularColor = color),
+                      onColorChanged: (color) =>
+                          setState(() => regularColor = color),
                       sectionColor: regularColor,
                     ),
                     SizedBox(height: 20),
@@ -1290,7 +1440,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       list: tempCoinPriceListBonus,
                       setState: setStateDialog,
                       isBonus: true,
-                      onColorChanged: (color) => setState(() => bonusColor = color),
+                      onColorChanged: (color) =>
+                          setState(() => bonusColor = color),
                       sectionColor: bonusColor,
                     ),
                     SizedBox(height: 20),
@@ -1300,7 +1451,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       setState: setStateDialog,
                       isCash: true,
                       isBonus: true,
-                      onColorChanged: (color) => setState(() => cashColor = color),
+                      onColorChanged: (color) =>
+                          setState(() => cashColor = color),
                       sectionColor: cashColor,
                     ),
                   ],
@@ -1453,25 +1605,25 @@ class _MyHomePageState extends State<MyHomePage> {
             mainAxisSize: MainAxisSize.min,
             children: List.generate(list.length, (index) {
               if (coinsControllers.length <= index) {
-                coinsControllers.add(
-                    TextEditingController(text: list[index]['coins'].toString()));
-                priceControllers.add(
-                    TextEditingController(text: list[index]['price'].toString()));
+                coinsControllers.add(TextEditingController(
+                    text: list[index]['coins'].toString()));
+                priceControllers.add(TextEditingController(
+                    text: list[index]['price'].toString()));
                 bonusControllers.add(isBonus
-                    ? TextEditingController(text: list[index]['bonus'].toString())
+                    ? TextEditingController(
+                        text: list[index]['bonus'].toString())
                     : null);
-                desControllers.add(
-                    TextEditingController(text: list[index]['desc'].toString()));
+                desControllers.add(TextEditingController(
+                    text: list[index]['desc'].toString()));
 
-                promoTitleControllers.add(
-                    TextEditingController(text: list[index]['promoTitle'].toString()));
+                promoTitleControllers.add(TextEditingController(
+                    text: list[index]['promoTitle'].toString()));
 
-                cashPromoTitleControllers.add(
-                    TextEditingController(text: list[index]['cashPromoTitle'].toString()));
+                cashPromoTitleControllers.add(TextEditingController(
+                    text: list[index]['cashPromoTitle'].toString()));
 
-                cashPromoTextControllers.add(
-                    TextEditingController(text: list[index]['cashPromoText'].toString()));
-
+                cashPromoTextControllers.add(TextEditingController(
+                    text: list[index]['cashPromoText'].toString()));
 
                 coinsFocusNodes.add(FocusNode());
                 priceFocusNodes.add(FocusNode());
@@ -1525,7 +1677,8 @@ class _MyHomePageState extends State<MyHomePage> {
                             },
                             onEditingComplete: () {
                               FocusScope.of(context).requestFocus(
-                                  bonusFocusNodes[index] ?? coinsFocusNodes[index]);
+                                  bonusFocusNodes[index] ??
+                                      coinsFocusNodes[index]);
                             },
                           ),
                         ),
@@ -1675,240 +1828,116 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void setLatestFailedTrx() async {
+    if (_isSetLatestRunning == false) {
+      setState(() {
+        _isSetLatestRunning = true;
+      });
 
-    if(_isSetLatestRunning == false)
-      {
-        setState(() {
-          _isSetLatestRunning = true;
-        });
+      List transactions = await getFailedTrx();
+      // only run after restarted
+      if (isLatestSoldout) {
+        print('recently soldout detected');
+        if (isLatestQR) {
+          if (transactions.isNotEmpty) {
+            Map<String, dynamic> firstTransaction =
+                transactions[0]; // Get the first item
+            final frefid = firstTransaction['trxid'];
+            final famount = firstTransaction['amount'];
+            final futdqr = firstTransaction['utdqr'];
 
-        List transactions = await getFailedTrx();
-        // only run after restarted
-        if (isLatestSoldout) {
-          print('recently soldout detected');
-          if (isLatestQR) {
-            if (transactions.isNotEmpty) {
-              Map<String, dynamic> firstTransaction =
-              transactions[0]; // Get the first item
-              final frefid = firstTransaction['trxid'];
-              final famount = firstTransaction['amount'];
-              final futdqr = firstTransaction['utdqr'];
+            final encryptedKey =
+                encryptPlainText(deviceCode, secretKey, ivString);
 
-              final encryptedKey =
-              encryptPlainText(deviceCode, secretKey, ivString);
+            final payloadtoken = {
+              "commandcode": "RequestToken",
+              "devicecode": deviceCode,
+              "result": "false",
+              "data": [
+                {"key": encryptedKey}
+              ]
+            };
 
-              final payloadtoken = {
-                "commandcode": "RequestToken",
-                "devicecode": deviceCode,
-                "result": "false",
-                "data": [
-                  {"key": encryptedKey}
-                ]
-              };
+            final responsetoken = await http.post(
+              Uri.parse(apiUrl),
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: json.encode(payloadtoken),
+            );
 
-              final responsetoken = await http.post(
-                Uri.parse(apiUrl),
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: json.encode(payloadtoken),
-              );
+            const int maxRetries = 30; // Maximum retries
+            int retries = 0;
 
-              const int maxRetries = 30; // Maximum retries
-              int retries = 0;
+            // Retry until isCompleteDispense becomes true or retries exceed maxRetries
+            while (retries < maxRetries) {
+              print('test : ');
+              print(communication.isCompleteDispense);
 
-              // Retry until isCompleteDispense becomes true or retries exceed maxRetries
-              while (retries < maxRetries) {
-                print('test : ');
-                print(communication.isCompleteDispense);
-
-                if (communication.isCompleteDispense) {
-                  final SuccessPaymentPayloadtrx = {
-                    "commandcode": "DI_SetTransactionEWalletV2",
-                    "devicecode": deviceCode,
-                    "data": [
-                      {
-                        "machineid": machineId,
-                        "statusstarttime": getFormattedDateTime(),
-                        "status": "Success",
-                        "eutdcounter": communication.totalUtdQr,
-                        "eamount": famount,
-                        "eoriginalamount": famount,
-                        "qrcode": "",
-                        "ewallettransactionid": frefid,
-                        "ewallettypecode": "DUITNOW",
-                        "numberofinquiry": "0",
-                        "duration": "0/175",
-                        "errorcode": "0",
-                        "errormessage": "",
-                        "ewallettestusercode": "",
-                        "slot": "55",
-                        "responsetime": "1",
-                        "rssi": "114"
-                      }
-                    ]
-                  };
-                  // If isCompleteDispense becomes true, return 'Completed'
-                  communication.isCompleteDispense =
-                  false; // Reset the flag for future operations
-                  communication.isSoldOut =
-                  false; // Reset the flag for future operations
-                  communication.isDispenseCash = false;
-                  communication.isQr = false;
-
-                  // fetch success api
-                  if (responsetoken.statusCode == 200) {
-                    Map<String, dynamic> parsedJson =
-                    jsonDecode(responsetoken.body);
-                    String token = parsedJson['data'][0]['token'];
-
-                    final privateKeyPem = await loadPrivateKey();
-                    String signature = await generateSignature(
-                        jsonEncode(SuccessPaymentPayloadtrx), key);
-
-                    final responseSuccessTRXEW = await http.post(
-                      Uri.parse(apiUrl),
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Token': token,
-                        'Signature': signature
-                      },
-                      body: json.encode(SuccessPaymentPayloadtrx),
-                    );
-
-                    if (responseSuccessTRXEW.statusCode == 200) {
-                      print('Transaction:Success sent successfully');
-                    } else {
-                      print(
-                          'Failed to success transaction. Status code: ${responseSuccessTRXEW.statusCode}');
+              if (communication.isCompleteDispense) {
+                final SuccessPaymentPayloadtrx = {
+                  "commandcode": "DI_SetTransactionEWalletV2",
+                  "devicecode": deviceCode,
+                  "data": [
+                    {
+                      "machineid": machineId,
+                      "statusstarttime": getFormattedDateTime(),
+                      "status": "Success",
+                      "eutdcounter": communication.totalUtdQr,
+                      "eamount": famount,
+                      "eoriginalamount": famount,
+                      "qrcode": "",
+                      "ewallettransactionid": frefid,
+                      "ewallettypecode": "DUITNOW",
+                      "numberofinquiry": "0",
+                      "duration": "0/175",
+                      "errorcode": "0",
+                      "errormessage": "",
+                      "ewallettestusercode": "",
+                      "slot": "55",
+                      "responsetime": "1",
+                      "rssi": "114"
                     }
+                  ]
+                };
+                // If isCompleteDispense becomes true, return 'Completed'
+                communication.isCompleteDispense =
+                    false; // Reset the flag for future operations
+                communication.isSoldOut =
+                    false; // Reset the flag for future operations
+                communication.isDispenseCash = false;
+                communication.isQr = false;
 
-                    await clearFailedTrx();
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.remove('isLatestSoldout');
-                    await prefs.remove('isLatestQR');
-                    setState(() {
-                      remainingTodispenseAm = 0;
-                      latestCashValue = 0;
-                      isLatestQR = false;
-                      isLatestSoldout = false;
-                      _isSetLatestRunning = false;
-                    });
-                    return;
-                  }
-                }
-                print('soldout returned');
+                // fetch success api
+                if (responsetoken.statusCode == 200) {
+                  Map<String, dynamic> parsedJson =
+                      jsonDecode(responsetoken.body);
+                  String token = parsedJson['data'][0]['token'];
 
-                // Wait for the specified interval before retrying
-                await Future.delayed(Duration(milliseconds: 2000));
-                retries++;
-              }
-            } else {
-              await clearFailedTrx();
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.remove('isLatestSoldout');
-              await prefs.remove('isLatestQR');
+                  final privateKeyPem = await loadPrivateKey();
+                  String signature = await generateSignature(
+                      jsonEncode(SuccessPaymentPayloadtrx), key);
 
-              communication.isCompleteDispense =
-              false; // Reset the flag for future operations
-              communication.isSoldOut =
-              false; // Reset the flag for future operations
-              communication.isDispenseCash = false;
-              communication.isQr = false;
-
-              setState(() {
-                remainingTodispenseAm = 0;
-                latestCashValue = 0;
-                isLatestQR = false;
-                isLatestSoldout = false;
-                _isSetLatestRunning = false;
-              });
-              return;
-            }
-          }
-
-          // latest cash trx
-          else {
-            if (transactions.isNotEmpty){
-              const int maxRetries = 30; // Maximum retries
-              int retries = 0;
-
-              // Retry until isCompleteDispense becomes true or retries exceed maxRetries
-              while (retries < maxRetries) {
-                if (communication.isCompleteDispense) {
-
-                  final encryptedKey =
-                  encryptPlainText(deviceCode, secretKey, ivString);
-
-                  final payloadtoken = {
-                    "commandcode": "RequestToken",
-                    "devicecode": deviceCode,
-                    "result": "false",
-                    "data": [
-                      {"key": encryptedKey}
-                    ]
-                  };
-                  // final response = await http.get(Uri.parse(apiUrl));
-                  final responsetoken = await http.post(
+                  final responseSuccessTRXEW = await http.post(
                     Uri.parse(apiUrl),
                     headers: {
                       'Content-Type': 'application/json',
+                      'Token': token,
+                      'Signature': signature
                     },
-                    body: json.encode(payloadtoken),
+                    body: json.encode(SuccessPaymentPayloadtrx),
                   );
 
-                  communication.isSoldOut =
-                  false; // Reset the flag for future operations
-                  communication.isCompleteDispense =
-                  false; // Reset the flag for future operations
-                  communication.isDispenseCash = false;
-                  communication.isQr = false;
-
-                  final setcashpayload = {
-                    "commandcode": "SetTransactionCash",
-                    "devicecode": deviceCode,
-                    "data": [
-                      {
-                        "statusstarttime": getFormattedDateTime(),
-                        "utdcounter": communication.UtdCash.toString(),
-                        "cashcounter": communication.CashCounter.toString(),
-                        "utdCoinTube": "0.00",
-                        "coinTubeCounter": "0.00",
-                        "utdCoinBox": "0.00",
-                        "coinBoxCounter": "0.00",
-                        "amount": latestCashValue == 0 ? communication.CASHDispenseCounter_.toString() : (latestCashValue / 100).toString(),
-                        "slot": "5",
-                        "rssi": "-99"
-                      }
-                    ]
-                  };
-
-                  final privateKeyPem = await loadPrivateKey();
-                  String signature =
-                  await generateSignature(jsonEncode(setcashpayload), key);
-
-                  if (responsetoken.statusCode == 200) {
-                    final responseData = json.decode(responsetoken.body);
-                    Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
-                    String token = parsedJson['data'][0]['token'];
-
-                    print('request token success');
-                    final responseSetCashTrx = http.post(
-                      Uri.parse(apiUrl),
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Token': token,
-                        'Signature': signature
-                      },
-                      body: json.encode(setcashpayload),
-                    );
+                  if (responseSuccessTRXEW.statusCode == 200) {
+                    print('Transaction:Success sent successfully');
+                  } else {
+                    print(
+                        'Failed to success transaction. Status code: ${responseSuccessTRXEW.statusCode}');
                   }
+
                   await clearFailedTrx();
                   final prefs = await SharedPreferences.getInstance();
                   await prefs.remove('isLatestSoldout');
                   await prefs.remove('isLatestQR');
-                  await prefs.remove('latestCashValue');
-
                   setState(() {
                     remainingTodispenseAm = 0;
                     latestCashValue = 0;
@@ -1916,62 +1945,181 @@ class _MyHomePageState extends State<MyHomePage> {
                     isLatestSoldout = false;
                     _isSetLatestRunning = false;
                   });
-                  print("transactions cash uploaded.");
                   return;
-                } else {
-                  print("No failed transactions found.");
                 }
-
-                await Future.delayed(Duration(milliseconds: 2000));
-                retries++;
               }
-            }
-            else {
-              await clearFailedTrx();
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.remove('isLatestSoldout');
-              await prefs.remove('isLatestQR');
+              print('soldout returned');
 
-              communication.isCompleteDispense =
-              false; // Reset the flag for future operations
-              communication.isSoldOut =
-              false; // Reset the flag for future operations
-              communication.isDispenseCash = false;
-              communication.isQr = false;
-
-              setState(() {
-                remainingTodispenseAm = 0;
-                latestCashValue = 0;
-                isLatestQR = false;
-                isLatestSoldout = false;
-                _isSetLatestRunning = false;
-              });
-              return;
+              // Wait for the specified interval before retrying
+              await Future.delayed(Duration(milliseconds: 2000));
+              retries++;
             }
+          } else {
+            await clearFailedTrx();
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.remove('isLatestSoldout');
+            await prefs.remove('isLatestQR');
+
+            communication.isCompleteDispense =
+                false; // Reset the flag for future operations
+            communication.isSoldOut =
+                false; // Reset the flag for future operations
+            communication.isDispenseCash = false;
+            communication.isQr = false;
+
+            setState(() {
+              remainingTodispenseAm = 0;
+              latestCashValue = 0;
+              isLatestQR = false;
+              isLatestSoldout = false;
+              _isSetLatestRunning = false;
+            });
+            return;
           }
-
-        } else {
-          await clearFailedTrx();
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.remove('isLatestSoldout');
-          await prefs.remove('isLatestQR');
-          await prefs.remove('latestCashValue');
-          setState(() {
-            remainingTodispenseAm = 0;
-            latestCashValue = 0;
-            isLatestQR = false;
-            isLatestSoldout = false;
-            _isSetLatestRunning = false;
-          });
-
         }
+
+        // latest cash trx
+        else {
+          if (transactions.isNotEmpty) {
+            const int maxRetries = 30; // Maximum retries
+            int retries = 0;
+
+            // Retry until isCompleteDispense becomes true or retries exceed maxRetries
+            while (retries < maxRetries) {
+              if (communication.isCompleteDispense) {
+                final encryptedKey =
+                    encryptPlainText(deviceCode, secretKey, ivString);
+
+                final payloadtoken = {
+                  "commandcode": "RequestToken",
+                  "devicecode": deviceCode,
+                  "result": "false",
+                  "data": [
+                    {"key": encryptedKey}
+                  ]
+                };
+                // final response = await http.get(Uri.parse(apiUrl));
+                final responsetoken = await http.post(
+                  Uri.parse(apiUrl),
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: json.encode(payloadtoken),
+                );
+
+                communication.isSoldOut =
+                    false; // Reset the flag for future operations
+                communication.isCompleteDispense =
+                    false; // Reset the flag for future operations
+                communication.isDispenseCash = false;
+                communication.isQr = false;
+
+                final setcashpayload = {
+                  "commandcode": "SetTransactionCash",
+                  "devicecode": deviceCode,
+                  "data": [
+                    {
+                      "statusstarttime": getFormattedDateTime(),
+                      "utdcounter": communication.UtdCash.toString(),
+                      "cashcounter": communication.CashCounter.toString(),
+                      "utdCoinTube": "0.00",
+                      "coinTubeCounter": "0.00",
+                      "utdCoinBox": "0.00",
+                      "coinBoxCounter": "0.00",
+                      "amount": latestCashValue == 0
+                          ? communication.CASHDispenseCounter_.toString()
+                          : (latestCashValue / 100).toString(),
+                      "slot": "5",
+                      "rssi": "-99"
+                    }
+                  ]
+                };
+
+                final privateKeyPem = await loadPrivateKey();
+                String signature =
+                    await generateSignature(jsonEncode(setcashpayload), key);
+
+                if (responsetoken.statusCode == 200) {
+                  final responseData = json.decode(responsetoken.body);
+                  Map<String, dynamic> parsedJson =
+                      jsonDecode(responsetoken.body);
+                  String token = parsedJson['data'][0]['token'];
+
+                  print('request token success');
+                  final responseSetCashTrx = http.post(
+                    Uri.parse(apiUrl),
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Token': token,
+                      'Signature': signature
+                    },
+                    body: json.encode(setcashpayload),
+                  );
+                }
+                await clearFailedTrx();
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.remove('isLatestSoldout');
+                await prefs.remove('isLatestQR');
+                await prefs.remove('latestCashValue');
+
+                setState(() {
+                  remainingTodispenseAm = 0;
+                  latestCashValue = 0;
+                  isLatestQR = false;
+                  isLatestSoldout = false;
+                  _isSetLatestRunning = false;
+                });
+                print("transactions cash uploaded.");
+                return;
+              } else {
+                print("No failed transactions found.");
+              }
+
+              await Future.delayed(Duration(milliseconds: 2000));
+              retries++;
+            }
+          } else {
+            await clearFailedTrx();
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.remove('isLatestSoldout');
+            await prefs.remove('isLatestQR');
+
+            communication.isCompleteDispense =
+                false; // Reset the flag for future operations
+            communication.isSoldOut =
+                false; // Reset the flag for future operations
+            communication.isDispenseCash = false;
+            communication.isQr = false;
+
+            setState(() {
+              remainingTodispenseAm = 0;
+              latestCashValue = 0;
+              isLatestQR = false;
+              isLatestSoldout = false;
+              _isSetLatestRunning = false;
+            });
+            return;
+          }
+        }
+      } else {
+        await clearFailedTrx();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('isLatestSoldout');
+        await prefs.remove('isLatestQR');
+        await prefs.remove('latestCashValue');
+        setState(() {
+          remainingTodispenseAm = 0;
+          latestCashValue = 0;
+          isLatestQR = false;
+          isLatestSoldout = false;
+          _isSetLatestRunning = false;
+        });
       }
-
-
+    }
   }
 
-  void InsertCash(
-      String status, int UtdCash, int CashCounter, int cashValue_, int UTDCASHCounter) async {
+  void InsertCash(String status, int UtdCash, int CashCounter, int cashValue_,
+      int UTDCASHCounter) async {
     print('insertcash being called');
     if (status == 'Dispensing') {
       setState(() {
@@ -2240,102 +2388,14 @@ class _MyHomePageState extends State<MyHomePage> {
 
   late MqttService mqttService;
 
-  @override
-  void initState() {
-    super.initState();
-    List<UsbDevice> devices = [];
-    UsbDevice? _device;
-    UsbPort? _port;
+  void _loadBackgroundPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final path = prefs.getString('background_image') ?? 'assets/default_bg.jpg';
+    final offset = prefs.getDouble('background_offset_y') ?? 0.0;
+
     setState(() {
-      isLoadingboot = true;
-    });
-    print('initState called');
-    loadSoldoutStatus();
-    mqttConn(); // call mqtt
-    initConnectivity();
-    _reconnectTimer?.cancel();
-
-    // UartService.uartStream.listen((data) {
-    //   print("data uart $data");
-    //   setState(() {
-    //     received = data;
-    //   });
-    // });
-
-    _reconnectTimer = Timer.periodic(Duration(seconds: 10), (timer) {
-      initConnectivity();
-    });
-
-    Future.delayed(Duration(seconds: 3), () {
-      _getMacAddress();
-      getKey();
-    });
-
-    _connectivitySubscription =
-        _connectivity.onConnectivityChanged.listen(_updateConnectionStatus);
-    // final portName = ''; // 'COM5';
-    // const platform = MethodChannel('com.example.serialport');
-    // Wrap the code in a try-catch block to handle errors
-
-    _loadSavedText(); // Load the saved text when the app starts
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // //testing
-      // await saveFailedTrx("test123" , "10.00", "1000" );
-      // await clearFailedTrx();
-      final packageInfo = await PackageInfo.fromPlatform();
-      setState(() {
-        currentVersion = packageInfo.version;
-      });
-      // final prefs = await SharedPreferences.getInstance();
-      // await prefs.remove('isLatestSoldout');
-      // await prefs.remove('isLatestQR');
-      // await prefs.remove('latestCashValue');
-      print('test get trx failed ');
-      List transactions = await getFailedTrx(); // Await the function call
-      print(transactions); // Print the result
-
-      try {
-        communication =
-            await Communication(null); // Ensure async initialization
-
-        await Future.delayed(Duration(seconds: 3), () {
-          if (communication!.isConnected == false) {
-            print("Error opening port");
-
-            // setState(() {
-            //   ErrormsgInitConn = "Error opening port";
-            // });
-            _showErrorDialog();
-            setState(() {
-              isLoadingboot = false;
-            });
-          } else {
-            _snackBar('Port Connected');
-          }
-        });
-      } catch (e) {
-        setState(() {
-          isLoadingboot = false;
-        });
-        print("Error opening port: $e");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error opening port: $e")),
-        );
-
-        _showErrorDialog();
-
-        setState(() {
-          ErrormsgInitConn = e.toString();
-        });
-      }
-
-      devices = await UsbSerial.listDevices();
-      setState(() {
-        myStringArray.addAll(devices); // Use addAll directly
-      });
-      setState(() {
-        isLoadingboot = false;
-      });
+      _backgroundImagePath = path;
+      _backgroundOffsetY = offset;
     });
   }
 
@@ -2704,12 +2764,10 @@ class _MyHomePageState extends State<MyHomePage> {
           Errormsg = 'Token is out of Stock';
           saveSoldout(true);
           // isMachineFaulty = true;
-        } else if(result.message == '2') {
-
+        } else if (result.message == '2') {
           Errormsg = 'Timeout';
           cancelFetchTRX("Timeout");
-        }
-        else{
+        } else {
           Errormsg = 'Timeout';
         }
       });
@@ -2774,86 +2832,76 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> cancelFetchTRX(String errorMsg) async {
-      String statustype = "";
-      if(errorMsg == "Timeout")
+    String statustype = "";
+    if (errorMsg == "Timeout") {
+      statustype = "Payment";
+    } else if (errorMsg == "Qr timeout") {
+      statustype = "Submit";
+    } else if (errorMsg == "User Cancelled") {
+      statustype = "Submit";
+    } else {
+      statustype = "Submit";
+    }
+
+    final privateKeyPem = await loadPrivateKey();
+    final payloadcanceltrx = {
+      "commandcode": "DI_SetTransactionEWalletV2",
+      "devicecode": deviceCode,
+      "data": [
         {
-          statustype = "Payment";
+          "statusstarttime": getFormattedDateTime(),
+          "machineid": machineId,
+          "status": statustype,
+          "eutdcounter": selectedAmount,
+          "eamount": selectedAmount,
+          "eoriginalamount": selectedAmount,
+          "discount": "0",
+          "discountentitlementamount": "0.00",
+          "qrcode": "",
+          "ewallettransactionid": refId,
+          "ewallettypecode": "DUITNOW",
+          "numberofinquiry": "0",
+          "duration": "0/175",
+          "errorcode": "255",
+          "errormessage": errorMsg,
+          "ewallettestusercode": "",
+          "responsetime": "2",
+          "rssi": rssi
         }
-      else if(errorMsg == "Qr timeout")
-        {
-          statustype = "Submit";
+      ]
+    };
+    String signature =
+        await generateSignature(jsonEncode(payloadcanceltrx), key);
+    try {
+      final responseTRXEW = await http.post(
+        Uri.parse(apiUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'Token': Token,
+          'Signature': signature
+        },
+        body: json.encode(payloadcanceltrx),
+      );
+
+      if (responseTRXEW.statusCode == 200) {
+        print('Transaction cancelled successfully');
+
+        if (errorMsg == 'Timeout') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  "Refund request successfully sent ✅. Processing time may vary—please check your e-wallet within 24 hours."),
+              duration: Duration(seconds: 6), // Set duration to 5 minutes
+            ),
+          );
         }
-      else if (errorMsg == "User Cancelled")
-        {
-          statustype = "Submit";
-        }
-      else{
-        statustype = "Submit";
+      } else {
+        print(
+            'Failed to cancel transaction. Status code: ${responseTRXEW.statusCode}');
       }
-
-      final privateKeyPem = await loadPrivateKey();
-      final payloadcanceltrx = {
-        "commandcode": "DI_SetTransactionEWalletV2",
-        "devicecode": deviceCode,
-        "data": [
-          {
-            "statusstarttime": getFormattedDateTime(),
-            "machineid": machineId,
-            "status": statustype,
-            "eutdcounter": selectedAmount,
-            "eamount": selectedAmount,
-            "eoriginalamount": selectedAmount,
-            "discount": "0",
-            "discountentitlementamount": "0.00",
-            "qrcode": "",
-            "ewallettransactionid": refId,
-            "ewallettypecode": "DUITNOW",
-            "numberofinquiry": "0",
-            "duration": "0/175",
-            "errorcode": "255",
-            "errormessage": errorMsg,
-            "ewallettestusercode": "",
-            "responsetime": "2",
-            "rssi": rssi
-          }
-        ]
-      };
-      String signature =
-          await generateSignature(jsonEncode(payloadcanceltrx), key);
-      try {
-        final responseTRXEW = await http.post(
-          Uri.parse(apiUrl),
-          headers: {
-            'Content-Type': 'application/json',
-            'Token': Token,
-            'Signature': signature
-          },
-          body: json.encode(payloadcanceltrx),
-        );
-
-        if (responseTRXEW.statusCode == 200) {
-          print('Transaction cancelled successfully');
-
-          if(errorMsg == 'Timeout')
-            {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                      "Refund request successfully sent ✅. Processing time may vary—please check your e-wallet within 24 hours."
-                  ),
-                  duration: Duration(seconds: 6), // Set duration to 5 minutes
-                ),
-              );
-            }
-
-        } else {
-          print(
-              'Failed to cancel transaction. Status code: ${responseTRXEW.statusCode}');
-        }
-      } catch (err) {
-        print('Error during fetch cancel trx: $err');
-      }
-
+    } catch (err) {
+      print('Error during fetch cancel trx: $err');
+    }
   }
 
   Future<void> handleButtonPress({
@@ -3023,13 +3071,199 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future<List<String>> _loadPresetBackgrounds() async {
+    final prefs = await SharedPreferences.getInstance();
+    return presetKeys.map((key) {
+      return prefs.getString(key) ??
+          'assets/images/bg${presetKeys.indexOf(key) + 1}.jpg';
+    }).toList();
+  }
+
+  Future<String?> _uploadImageForSlot(
+      BuildContext context, int slotIndex) async {
+    FilePickerResult? result =
+        await FilePicker.platform.pickFiles(type: FileType.image);
+    if (result != null && result.files.single.path != null) {
+      String filePath = result.files.single.path!;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(presetKeys[slotIndex], filePath);
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Background ${slotIndex + 1} updated!')));
+      return filePath;
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('No image selected.')));
+      return null;
+    }
+  }
+
+  void _showBackgroundImageSettingDialog(BuildContext context) async {
+    List<String> presetBackgrounds = await _loadPresetBackgrounds();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              insetPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              child: SizedBox(
+                height: 700,
+                width: MediaQuery.of(context).size.width * 0.5,
+                child: Column(
+                  children: [
+                    // Custom Title with Close Button
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 20, 8, 0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Select Background',
+                              style: Theme.of(context).textTheme.titleLarge),
+                          IconButton(
+                            icon: Icon(Icons.close),
+                            onPressed: () {
+                              Navigator.pop(context);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        child: Column(
+                          children: [
+                            ...List.generate(5, (index) {
+                              String bgPath = presetBackgrounds[index];
+                              return ListTile(
+                                  leading: bgPath.startsWith('assets/')
+                                      ? Image.asset(
+                                          bgPath,
+                                          width: 50,
+                                          height: 50,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : Image.file(
+                                          File(bgPath),
+                                          width: 50,
+                                          height: 50,
+                                          fit: BoxFit.cover,
+                                        ),
+                                  title: Text('Background ${index + 1}'),
+                                  trailing: IconButton(
+                                    icon: Icon(Icons.upload_file),
+                                    onPressed: () async {
+                                      final path = await _uploadImageForSlot(
+                                          context, index);
+                                      if (path != null) {
+                                        setState(() {
+                                          presetBackgrounds[index] = path;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedImagePath = bgPath;
+                                      _dragOffset = 0.0;
+                                    });
+                                  });
+                            }),
+                            Divider(),
+                            ListTile(
+                              leading: Icon(Icons.restore),
+                              title:
+                                  Text('Reset Current Background to Default'),
+                              onTap: () async {
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+                                await prefs.setString(
+                                    'background_image', 'assets/images/bg.jpg');
+                                setState(() {
+                                  _backgroundImagePath = 'assets/images/bg.jpg';
+                                });
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content:
+                                          Text('Background reset to default.')),
+                                );
+                              },
+                            ),
+                            if (_selectedImagePath.isNotEmpty)
+                              Column(
+                                children: [
+                                  SizedBox(height: 16),
+                                  Text("Preview & Adjust",
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium),
+                                  SizedBox(height: 8),
+                                  Container(
+                                    height: 200,
+                                    width: double.infinity,
+                                    color: Colors.black12,
+                                    child: GestureDetector(
+                                      onVerticalDragUpdate: (details) {
+                                        setState(() {
+                                          _dragOffset += details.delta.dy;
+                                        });
+                                      },
+                                      child: ClipRect(
+                                        child: Transform.translate(
+                                          offset: Offset(0, _dragOffset),
+                                          child: _selectedImagePath
+                                                  .startsWith('assets/')
+                                              ? Image.asset(
+                                                  _selectedImagePath,
+                                                  width: double.infinity,
+                                                  fit: BoxFit.cover,
+                                                )
+                                              : Image.file(
+                                                  File(_selectedImagePath),
+                                                  width: double.infinity,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(height: 15),
+                                  ElevatedButton.icon(
+                                    onPressed: () {
+                                      _setBackground(_selectedImagePath,
+                                          offsetY: _dragOffset);
+                                      Navigator.pop(context);
+                                    },
+                                    icon: Icon(Icons.check),
+                                    label: Text("Confirm"),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _showPasswordDialog(BuildContext context) {
     final TextEditingController passwordController = TextEditingController();
 
     showDialog(
       context: context,
       barrierDismissible:
-          false, // Prevents closing the dialog when clicking outside
+          false, // Prevents closing the dialog when clicking outside1
       builder: (context) {
         String contentMessage = "Enter Password";
         bool isPasswordFieldVisible =
@@ -3179,6 +3413,34 @@ class _MyHomePageState extends State<MyHomePage> {
 
                               if (!isShowTextVar)
                                 Positioned(
+                                  top: 320,
+                                  left: 0,
+                                  right: 0,
+                                  child: ElevatedButton(
+                                    onPressed: () {
+                                      _showBackgroundImageSettingDialog(
+                                          context);
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blueAccent,
+                                      minimumSize: Size(120, 50),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Background Setting',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                              if (!isShowTextVar)
+                                Positioned(
                                   top:
                                       200, // Position it 50 pixels from the top
                                   left: 0, // Align to the left
@@ -3241,48 +3503,6 @@ class _MyHomePageState extends State<MyHomePage> {
                                         fontWeight:
                                             FontWeight.bold, // Text weight
                                       ),
-                                    ),
-                                  ),
-                                ),
-
-                              if (!isShowTextVar)
-                                Positioned(
-                                  top:
-                                      320, // Position it 320 pixels from the top
-                                  left: 0, // Align to the left
-                                  right: 0, // Align to the right
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal:
-                                            20.0), // Add horizontal padding
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          mqttConnected
-                                              ? 'MQTT: Connected'
-                                              : 'MQTT: Disconnected',
-                                          style: TextStyle(
-                                            fontSize: 14.0,
-                                            color:
-                                                Colors.black.withOpacity(0.6),
-                                          ),
-                                        ),
-                                        SizedBox(
-                                            height:
-                                                4.0), // Space between status texts
-                                        Text(
-                                          communication.isConnected
-                                              ? 'Port: Connected'
-                                              : 'Port: Disconnected',
-                                          style: TextStyle(
-                                            fontSize: 14.0,
-                                            color:
-                                                Colors.black.withOpacity(0.6),
-                                          ),
-                                        ),
-                                      ],
                                     ),
                                   ),
                                 ),
@@ -3350,6 +3570,48 @@ class _MyHomePageState extends State<MyHomePage> {
                                   ],
                                 ),
                               ),
+
+                              if (!isShowTextVar)
+                                Positioned(
+                                  top:
+                                      370, // Position it 320 pixels from the top
+                                  left: 0, // Align to the left
+                                  right: 0, // Align to the right
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal:
+                                            20.0), // Add horizontal padding
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          mqttConnected
+                                              ? 'MQTT: Connected'
+                                              : 'MQTT: Disconnected',
+                                          style: TextStyle(
+                                            fontSize: 14.0,
+                                            color:
+                                                Colors.black.withOpacity(0.6),
+                                          ),
+                                        ),
+                                        SizedBox(
+                                            height:
+                                                4.0), // Space between status texts
+                                        Text(
+                                          communication.isConnected
+                                              ? 'Port: Connected'
+                                              : 'Port: Disconnected',
+                                          style: TextStyle(
+                                            fontSize: 14.0,
+                                            color:
+                                                Colors.black.withOpacity(0.6),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               if (!isShowTextVar)
                                 // Exit App button
                                 Positioned(
@@ -3882,7 +4144,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ],
               if (isCashOffer) ...[
                 TextSpan(
-                  text:  '$cashPromoTitle\n$cashPromoText\n',
+                  text: '$cashPromoTitle\n$cashPromoText\n',
                   style: TextStyle(
                     fontSize: 40,
                     fontWeight: FontWeight.bold,
@@ -3966,17 +4228,24 @@ class _MyHomePageState extends State<MyHomePage> {
             top: 0,
             left: 0,
             right: 0,
-            child: Container(
-              height: screenHeight * 0.45, // 45% of screen height
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage(
-                      'assets/images/bg.jpg'), // Add your image path here
-                  fit: BoxFit.cover, // Cover the entire container
+            child: Transform.translate(
+              offset: Offset(0, _backgroundOffsetY),
+              child: Container(
+                height: screenHeight * 0.45,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    image: _backgroundImagePath.startsWith('assets/')
+                        ? AssetImage(_backgroundImagePath)
+                        : FileImage(File(_backgroundImagePath))
+                            as ImageProvider,
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
             ),
           ),
+
           // Main Container covering the remaining screen height
           Positioned(
             top: screenHeight * 0.30, // Start 40% from top to avoid overlap
@@ -4059,7 +4328,6 @@ class _MyHomePageState extends State<MyHomePage> {
                           isCashOffer: false,
                           bonus: item['bonus'], // Pass the bonus value
                           promoTitle: item['promoTitle'],
-
                         );
                       }).toList(),
                     ],
@@ -4570,7 +4838,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         width: 375, // Forces text to take full width
                         child: Text(
                           remainingTodispenseAm == 0
-                              ? 'Soldout!'  // If no tokens were dispensed
+                              ? 'Soldout!' // If no tokens were dispensed
                               : 'Soldout! \nRemaining Token: $remainingTodispenseAm',
                           textAlign: TextAlign.center,
                           style: TextStyle(
