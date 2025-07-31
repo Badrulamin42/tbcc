@@ -179,6 +179,7 @@ class LoadingOverlay {
 class _MyHomePageState extends State<MyHomePage> {
   String apiUrl = 'https://transpireqr-api.transpire.com.my/API/Exchange';
   late TextEditingController _controller; // Text editing controller
+  final TransformationController _controllerzoom = TransformationController();
   String selectedAmount = ''; // Store the selected amount as state
   int selectedAmountCoin = 0; // Store the selected amount as state
   String? qrCodeImageUrl;
@@ -238,7 +239,13 @@ class _MyHomePageState extends State<MyHomePage> {
   String received = '';
   String _selectedImagePath = '';
   double _dragOffset = 0.0;
-  double _backgroundOffsetY = 0.0;
+  double _backgroundOffsetY = 0.0; // FINAL position
+  double _backgroundOffsetX = 0.0; // FINAL position
+  double _previewOffsetY = 0.0; // Used inside dialog
+  double _currentScale = 1.0; // FINAL scale
+  double _previewScale = 1.0; // Used inside dialog
+
+  List<String> _customNames = ['', '', '', '', ''];
 
   List<String> presetKeys = [
     'background_slot_1',
@@ -254,7 +261,7 @@ class _MyHomePageState extends State<MyHomePage> {
     List<UsbDevice> devices = [];
     UsbDevice? _device;
     UsbPort? _port;
-
+    _loadBackgroundSettings();
     setState(() {
       isLoadingboot = true;
     });
@@ -354,33 +361,43 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  Future<void> _uploadCustomImage(BuildContext context) async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-    );
-
-    if (result != null && result.files.single.path != null) {
-      String filePath = result.files.single.path!;
-      _setBackground(filePath);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Custom background set!'),
-      ));
-    } else {
-      // User canceled the picker
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('No image selected.'),
-      ));
-    }
-  }
-
-  void _setBackground(String path, {double offsetY = 0.0}) async {
+  void _setBackground(String imagePath) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('background_image', path);
-    await prefs.setDouble('background_offset_y', offsetY);
+    await prefs.setString('background_image', imagePath);
+
+    final matrix = _controllerzoom.value;
+    final scale2 = matrix.getMaxScaleOnAxis();
+    final offset = Offset(matrix.row0[3], matrix.row1[3]);
+
+    await prefs.setDouble('background_scale', scale2);
+    await prefs.setDouble('background_offset_x', offset.dx);
+    await prefs.setDouble('background_offset_y', offset.dy);
 
     setState(() {
-      _backgroundImagePath = path;
-      _backgroundOffsetY = offsetY;
+      _backgroundImagePath = imagePath;
+      _currentScale = scale2;
+      _backgroundOffsetY = offset.dy;
+      _backgroundOffsetX = offset.dx;
+    });
+  }
+
+  void _loadBackgroundSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _selectedImagePath =
+          prefs.getString('background_image') ?? 'assets/images/bg.jpg';
+      _backgroundImagePath =
+          prefs.getString('background_image') ?? 'assets/images/bg.jpg';
+      _currentScale = prefs.getDouble('background_scale') ?? 1.0;
+      _backgroundOffsetY = prefs.getDouble('background_offset_y') ?? 0.0;
+    });
+  }
+
+  Future<void> _loadCustomNames() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String>? names = prefs.getStringList('background_custom_names');
+    setState(() {
+      _customNames = names ?? List.filled(5, '');
     });
   }
 
@@ -2388,17 +2405,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   late MqttService mqttService;
 
-  void _loadBackgroundPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final path = prefs.getString('background_image') ?? 'assets/default_bg.jpg';
-    final offset = prefs.getDouble('background_offset_y') ?? 0.0;
-
-    setState(() {
-      _backgroundImagePath = path;
-      _backgroundOffsetY = offset;
-    });
-  }
-
   Future<void> loadSoldoutStatus() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -3097,8 +3103,17 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future<void> _saveCustomNames() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('background_custom_names', _customNames);
+  }
+
   void _showBackgroundImageSettingDialog(BuildContext context) async {
     List<String> presetBackgrounds = await _loadPresetBackgrounds();
+    await _loadCustomNames();
+
+    double previewScale = _currentScale;
+    double previewOffsetY = _backgroundOffsetY;
 
     showDialog(
       context: context,
@@ -3107,12 +3122,15 @@ class _MyHomePageState extends State<MyHomePage> {
           builder: (context, setState) {
             return Dialog(
               insetPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              child: SizedBox(
-                height: 700,
-                width: MediaQuery.of(context).size.width * 0.5,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.9,
+                  maxWidth: MediaQuery.of(context).size.width * 0.6,
+                ),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Custom Title with Close Button
+                    // Title with Close
                     Padding(
                       padding: const EdgeInsets.fromLTRB(24, 20, 8, 0),
                       child: Row(
@@ -3122,15 +3140,15 @@ class _MyHomePageState extends State<MyHomePage> {
                               style: Theme.of(context).textTheme.titleLarge),
                           IconButton(
                             icon: Icon(Icons.close),
-                            onPressed: () {
-                              Navigator.pop(context);
-                            },
+                            onPressed: () => Navigator.pop(context),
                           ),
                         ],
                       ),
                     ),
                     const Divider(height: 1),
-                    Expanded(
+
+                    // Scrollable content (background list and reset)
+                    Flexible(
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 8),
@@ -3138,39 +3156,71 @@ class _MyHomePageState extends State<MyHomePage> {
                           children: [
                             ...List.generate(5, (index) {
                               String bgPath = presetBackgrounds[index];
-                              return ListTile(
-                                  leading: bgPath.startsWith('assets/')
-                                      ? Image.asset(
-                                          bgPath,
-                                          width: 50,
-                                          height: 50,
-                                          fit: BoxFit.cover,
-                                        )
-                                      : Image.file(
-                                          File(bgPath),
-                                          width: 50,
-                                          height: 50,
-                                          fit: BoxFit.cover,
-                                        ),
-                                  title: Text('Background ${index + 1}'),
-                                  trailing: IconButton(
-                                    icon: Icon(Icons.upload_file),
-                                    onPressed: () async {
-                                      final path = await _uploadImageForSlot(
-                                          context, index);
-                                      if (path != null) {
-                                        setState(() {
-                                          presetBackgrounds[index] = path;
-                                        });
-                                      }
+                              return Column(
+                                children: [
+                                  ListTile(
+                                    leading: bgPath.startsWith('assets/')
+                                        ? Image.asset(bgPath,
+                                            width: 50,
+                                            height: 50,
+                                            fit: BoxFit.cover)
+                                        : Image.file(File(bgPath),
+                                            width: 50,
+                                            height: 50,
+                                            fit: BoxFit.cover),
+                                    title: Text(_customNames[index].isEmpty
+                                        ? 'Background ${index + 1}'
+                                        : _customNames[index]),
+                                    trailing: IconButton(
+                                      icon: Icon(Icons.upload_file),
+                                      onPressed: () async {
+                                        final path = await _uploadImageForSlot(
+                                            context, index);
+                                        if (path != null) {
+                                          setState(() {
+                                            presetBackgrounds[index] = path;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedImagePath = bgPath;
+                                        _dragOffset = 0.0;
+                                        _backgroundOffsetY =
+                                            0.0; // FINAL position
+                                        _backgroundOffsetX =
+                                            0.0; // FINAL position
+                                        _previewOffsetY =
+                                            0.0; // Used inside dialog
+                                        _currentScale = 1.0; // FINAL scale
+                                        _previewScale =
+                                            1.0; // Used inside dialog
+                                      });
                                     },
                                   ),
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedImagePath = bgPath;
-                                      _dragOffset = 0.0;
-                                    });
-                                  });
+                                  if (_selectedImagePath == bgPath)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16),
+                                      child: TextField(
+                                        decoration: InputDecoration(
+                                          labelText:
+                                              'Rename Background ${index + 1}',
+                                          isDense: true,
+                                        ),
+                                        controller: TextEditingController(
+                                          text: _customNames[index],
+                                        ),
+                                        onChanged: (value) {
+                                          _customNames[index] = value;
+                                          _saveCustomNames();
+                                        },
+                                      ),
+                                    ),
+                                  SizedBox(height: 12),
+                                ],
+                              );
                             }),
                             Divider(),
                             ListTile(
@@ -3182,8 +3232,17 @@ class _MyHomePageState extends State<MyHomePage> {
                                     await SharedPreferences.getInstance();
                                 await prefs.setString(
                                     'background_image', 'assets/images/bg.jpg');
+
                                 setState(() {
                                   _backgroundImagePath = 'assets/images/bg.jpg';
+                                  _selectedImagePath = 'assets/images/bg.jpg';
+                                  _dragOffset = 0.0;
+                                  _backgroundOffsetY = 0.0; // FINAL position
+                                  _backgroundOffsetX = 0.0; // FINAL position
+                                  _previewOffsetY = 0.0; // Used inside dialog
+                                  _currentScale = 1.0; // FINAL scale
+                                  _previewScale = 1.0; // Used inside dialog
+                                  _controllerzoom.value = Matrix4.identity();
                                 });
                                 Navigator.pop(context);
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -3193,49 +3252,67 @@ class _MyHomePageState extends State<MyHomePage> {
                                 );
                               },
                             ),
-                            if (_selectedImagePath.isNotEmpty)
-                              Column(
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Animated Preview section (only if image selected)
+                    AnimatedSize(
+                      duration: Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      child: _selectedImagePath.isNotEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              child: Column(
                                 children: [
-                                  SizedBox(height: 16),
                                   Text("Preview & Adjust",
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleMedium),
                                   SizedBox(height: 8),
                                   Container(
-                                    height: 200,
+                                    height: 500,
                                     width: double.infinity,
                                     color: Colors.black12,
-                                    child: GestureDetector(
-                                      onVerticalDragUpdate: (details) {
-                                        setState(() {
-                                          _dragOffset += details.delta.dy;
-                                        });
-                                      },
-                                      child: ClipRect(
-                                        child: Transform.translate(
-                                          offset: Offset(0, _dragOffset),
-                                          child: _selectedImagePath
-                                                  .startsWith('assets/')
-                                              ? Image.asset(
-                                                  _selectedImagePath,
-                                                  width: double.infinity,
-                                                  fit: BoxFit.cover,
-                                                )
-                                              : Image.file(
-                                                  File(_selectedImagePath),
-                                                  width: double.infinity,
-                                                  fit: BoxFit.cover,
-                                                ),
+                                    child: InteractiveViewer(
+                                      transformationController: _controllerzoom,
+                                      panEnabled: true, // allow dragging
+                                      scaleEnabled: true, // allow zooming
+                                      minScale: 0.5,
+                                      maxScale: 3.0,
+                                      boundaryMargin: EdgeInsets.all(double
+                                          .infinity), // allow full movement
+                                      child: Container(
+                                        height: 500,
+                                        width: double.infinity,
+                                        alignment: Alignment.topCenter,
+                                        clipBehavior: Clip.none,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey[300],
                                         ),
+                                        child: _selectedImagePath
+                                                .startsWith('assets/')
+                                            ? Image.asset(
+                                                _selectedImagePath,
+                                                fit: BoxFit.fitWidth,
+                                                alignment: Alignment.topCenter,
+                                                width: double.infinity,
+                                              )
+                                            : Image.file(
+                                                File(_selectedImagePath),
+                                                fit: BoxFit.fitWidth,
+                                                alignment: Alignment.topCenter,
+                                                width: double.infinity,
+                                              ),
                                       ),
                                     ),
                                   ),
-                                  SizedBox(height: 15),
+                                  SizedBox(height: 12),
                                   ElevatedButton.icon(
                                     onPressed: () {
-                                      _setBackground(_selectedImagePath,
-                                          offsetY: _dragOffset);
+                                      _setBackground(_selectedImagePath);
                                       Navigator.pop(context);
                                     },
                                     icon: Icon(Icons.check),
@@ -3243,9 +3320,8 @@ class _MyHomePageState extends State<MyHomePage> {
                                   ),
                                 ],
                               ),
-                          ],
-                        ),
-                      ),
+                            )
+                          : SizedBox.shrink(),
                     ),
                   ],
                 ),
@@ -3413,34 +3489,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
                               if (!isShowTextVar)
                                 Positioned(
-                                  top: 320,
-                                  left: 0,
-                                  right: 0,
-                                  child: ElevatedButton(
-                                    onPressed: () {
-                                      _showBackgroundImageSettingDialog(
-                                          context);
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.blueAccent,
-                                      minimumSize: Size(120, 50),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      'Background Setting',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-
-                              if (!isShowTextVar)
-                                Positioned(
                                   top:
                                       200, // Position it 50 pixels from the top
                                   left: 0, // Align to the left
@@ -3474,8 +3522,35 @@ class _MyHomePageState extends State<MyHomePage> {
 
                               if (!isShowTextVar)
                                 Positioned(
+                                  top: 260,
+                                  left: 0,
+                                  right: 0,
+                                  child: ElevatedButton(
+                                    onPressed: () {
+                                      _showBackgroundImageSettingDialog(
+                                          context);
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blueAccent,
+                                      minimumSize: Size(120, 50),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Background Setting',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              if (!isShowTextVar)
+                                Positioned(
                                   top:
-                                      260, // Position it 50 pixels from the top
+                                      320, // Position it 50 pixels from the top
                                   left: 0, // Align to the left
                                   right: 0, // Align to the right
                                   child: ElevatedButton(
@@ -3574,7 +3649,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               if (!isShowTextVar)
                                 Positioned(
                                   top:
-                                      370, // Position it 320 pixels from the top
+                                      375, // Position it 320 pixels from the top
                                   left: 0, // Align to the left
                                   right: 0, // Align to the right
                                   child: Padding(
@@ -4228,21 +4303,15 @@ class _MyHomePageState extends State<MyHomePage> {
             top: 0,
             left: 0,
             right: 0,
-            child: Transform.translate(
-              offset: Offset(0, _backgroundOffsetY),
-              child: Container(
-                height: screenHeight * 0.45,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  image: DecorationImage(
-                    image: _backgroundImagePath.startsWith('assets/')
-                        ? AssetImage(_backgroundImagePath)
-                        : FileImage(File(_backgroundImagePath))
-                            as ImageProvider,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
+            child: Transform(
+              transform: Matrix4.identity()
+                ..translate(_backgroundOffsetX,
+                    _backgroundOffsetY) // Apply both X and Y offsets
+                ..scale(_currentScale),
+              alignment: Alignment.topCenter,
+              child: _selectedImagePath.startsWith('assets/')
+                  ? Image.asset(_selectedImagePath, fit: BoxFit.cover)
+                  : Image.file(File(_selectedImagePath), fit: BoxFit.cover),
             ),
           ),
 
