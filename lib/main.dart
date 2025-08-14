@@ -2747,6 +2747,8 @@ class _MyHomePageState extends State<MyHomePage> {
         UTDQR = result.utdQr.toString();
       });
 
+      // fix 1.1.8 completed/success but no dispense at all, refund at all cost
+
       if (remainingTodispenseAm == remainingTodispenseLast) {
         Errormsg = 'Timeout';
         cancelFetchTRX("Timeout");
