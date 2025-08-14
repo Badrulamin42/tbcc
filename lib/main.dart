@@ -217,6 +217,7 @@ class _MyHomePageState extends State<MyHomePage> {
   String secretKey = ''; // Must be 32 characters
   String ivString = ''; // Must be 16 characters
   int remainingTodispenseAm = 0;
+  int remainingTodispenseLast = 0; // Last Request amount
   String? _macAddress;
   String trxidinject = '';
   bool isLatestSoldout = false;
@@ -2265,6 +2266,7 @@ class _MyHomePageState extends State<MyHomePage> {
     //submit trx payload
     setState(() {
       remainingTodispenseAm = amounttodis!;
+      remainingTodispenseLast = amounttodis;
     });
     final PaymentPayloadtrx = {
       "commandcode": "DI_SetTransactionEWalletV2",
@@ -2685,12 +2687,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
               int injectamount = int.tryParse(data['amount'].toString()) ?? 0;
 
-              print('testing amount inj : $injectamount');
-              // Check if the parsed amount is valid
-              // if (!validAmounts.contains(injectamount / 100)) {
-              //   // If the amount is invalid, set it to 0 or handle it as you need
-              //   injectamount = 0;
-              // }
               double damount = (injectamount / 100);
               setState(() {
                 injectAmountstr = damount.toStringAsFixed(2);
@@ -2719,21 +2715,10 @@ class _MyHomePageState extends State<MyHomePage> {
                 break;
               }
 
-              // mqttService.disconnect();
-
-              // You can also dispose of any other resources if needed here
-
-              // Future.delayed(Duration(seconds: 1), () {
-              // dispose();
-              // });
-
               break;
             } else {
               print('Wrong Reference ID!!!');
             }
-
-            // If you've got what you need, you can break out of the loop
-            // dispose();
           }
         }
       } catch (e) {
@@ -2761,6 +2746,13 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
         UTDQR = result.utdQr.toString();
       });
+
+      if (remainingTodispenseAm == remainingTodispenseLast) {
+        Errormsg = 'Timeout';
+        cancelFetchTRX("Timeout");
+
+        return false;
+      }
 
       return true;
     } else {
