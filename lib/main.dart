@@ -2749,13 +2749,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
       // fix 1.1.8 completed/success but no dispense at all, refund at all cost
 
-      if (remainingTodispenseAm == remainingTodispenseLast) {
-        Errormsg = 'Timeout';
-        cancelFetchTRX("Timeout");
-
-        return false;
-      }
-
       return true;
     } else {
       setState(() {
