@@ -204,7 +204,7 @@ class Communication {
         return;
       } else {
         await Future.delayed(
-            Duration(milliseconds: 10)); // Allow time for next data chunk
+            Duration(milliseconds: 150)); // Allow time for next data chunk
         return; // Wait for more data
       }
     }
@@ -363,7 +363,7 @@ class Communication {
         Uint8List.fromList([0xAA, 0x03, 0x02, 0x19, 0x18, 0xDD]);
     Uint8List aftersoldoutres =
         Uint8List.fromList([0xAA, 0x05, 0x01, 0x19, 0x00, 0x00, 0x1D, 0xDD]);
-    Uint8List reqres = Uint8List.fromList([
+    Uint8List qrdisres = Uint8List.fromList([
       0xAA,
       0x0F,
       0x02,
@@ -641,6 +641,11 @@ class Communication {
         data[8] == 0x5E &&
         data[9] == 0x66 &&
         data[10] == sentreqcommand[10]) {
+      if (data[13] == 0x01) {
+        print("Mother board receive signal and dispense");
+      } else {
+        print("Mother board not able receive signal and dispense");
+      }
       print("Accepted request receive ");
     } else if (_listEquals(data, aftersoldoutaccept2)) {
       print('new ***');
