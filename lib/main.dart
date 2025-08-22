@@ -30,6 +30,7 @@ import 'package:usb_serial/usb_serial.dart';
 
 import 'utils//RSA.dart'; // Import the signature utility file
 import 'utils/communication.dart';
+import 'utils/HelperFunction/commonUtility.dart';
 import 'utils/mqtt_service.dart'; // Import the MQTT service class
 
 const String appTag = "com.example.tbcc";
@@ -1904,6 +1905,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       "eamount": famount,
                       "eoriginalamount": famount,
                       "qrcode": "",
+                      "Message": communication.isCompleteDispense,
                       "ewallettransactionid": frefid,
                       "ewallettypecode": "DUITNOW",
                       "numberofinquiry": "0",
@@ -2509,6 +2511,76 @@ class _MyHomePageState extends State<MyHomePage> {
       );
     }
   }
+
+  void _showLogMessageDialog() async {
+    final logs = await LogStorage.getLogs();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, // make it taller
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "Debug Log",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: logs.isEmpty
+                      ? const Center(child: Text("No logs found"))
+                      : ListView.builder(
+                    itemCount: logs.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: Text(
+                          logs[index],
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton(
+                      onPressed: () async {
+                        await LogStorage.clearLogs();
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Logs cleared")),
+                        );
+                      },
+                      child: const Text(
+                        "Clear Logs",
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text("Close"),
+                    ),
+                  ],
+                )
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
 
   Future<bool> injection(int injectamt) async {
     final result = await communication?.inject(injectamt);
@@ -3568,7 +3640,6 @@ class _MyHomePageState extends State<MyHomePage> {
                                     ),
                                   ),
                                 ),
-
                               Positioned(
                                 top: 115, // Position it 50 pixels from the top
                                 left: 0, // Align to the left
@@ -4484,14 +4555,18 @@ class _MyHomePageState extends State<MyHomePage> {
           Stack(
             children: [
               Positioned(
-                top: 20.0, // Adjust the position as needed
-                left: 100.0,
+                top: 25.0, // Adjust the position as needed
+                left: 120.0,
                 child: Opacity(
                   opacity: 1, // Fully transparent but still interactive
-                  child: TextButton(
-                    onPressed: () {
-                      handleAdminButtonClick(context);
+                  child: GestureDetector(
+                    onTap: () {
+                      handleAdminButtonClick(context); // triple-tap handler
                     },
+                    onLongPress: () {
+                      _showLogMessageDialog(); // long press handler
+                    },
+
                     child: Text.rich(
                       TextSpan(
                         children: [

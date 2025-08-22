@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:tbcc/utils/HelperFunction/commonUtility.dart';
 import 'package:usb_serial/usb_serial.dart';
 
 import '../main.dart';
@@ -42,17 +43,21 @@ class Communication {
   bool isDispenseCash = false;
   String hexString = '';
   List<int> sentreqcommand = [];
+  // List<String> logMessage = [];
 
+  DateTime currentDateTime = DateTime.now();
   //init
+
   Communication(UsbDevice? testPort) {
     try {
       findAndOpenDevice(testPort);
 
-      print('isconnected $isConnected');
+       LogStorage.logMessage('Start Communication isconnected >>> $isConnected');
 
       Future.delayed(Duration(seconds: 3), () {
         setupCommunication();
-        print('isconnected2 $isConnected');
+
+        LogStorage.logMessage('Start Communication isconnected Test 2 >>> $isConnected');
       });
 
       Future.delayed(Duration(seconds: 5), () {
@@ -70,7 +75,9 @@ class Communication {
         UsbPort.STOPBITS_1,
         UsbPort.PARITY_NONE,
       );
-      print('Serial communication configured!');
+
+      LogStorage.logMessage('Serial communication configured!');
+
     }
   }
 
@@ -78,7 +85,8 @@ class Communication {
     try {
       // List all devices connected via USB
       List<UsbDevice> devices = await UsbSerial.listDevices();
-      print('Devices : $devices');
+      LogStorage.logMessage('Devices >>> $devices');
+
       // Find the device by its Vendor ID and Product ID
       if (init == null) {
         _device =
@@ -88,15 +96,18 @@ class Communication {
 
           // device.vid == 0x1A86 && device.pid == 0x7523, // Vendor ID: 1a86, Product ID: 7523
           orElse: () => throw Exception("USB Serial device not found!"),
+
         );
       } else {
         _device = init;
       }
 
       if (_device == null) {
+        LogStorage.logMessage('No device initialized!');
         return false;
       }
     } catch (e) {
+      LogStorage.logMessage('Error - $e');
       throw Exception(e);
     }
 
@@ -113,17 +124,19 @@ class Communication {
         bool opened = await _port!.open();
         if (opened) {
           isConnected = true;
-          print('Device opened successfully!');
+          LogStorage.logMessage('Device opened successfully!');
+
           return true;
         } else {
-          print('Failed to open the device.');
+          LogStorage.logMessage('Failed to open the device.');
           return false;
         }
       } else {
-        print('Device not found');
+        LogStorage.logMessage('Device not found.');
         return false;
       }
     } catch (e) {
+      LogStorage.logMessage('Error - $e');
       throw Exception(e);
     }
   }
@@ -139,10 +152,11 @@ class Communication {
 
     try {
       _port!.write(data);
-      print(
-          'OUT: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      LogStorage.logMessage(
+          'Android OUT >>> ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}'
+      );
     } catch (e) {
-      print('Error sending data: $e');
+      LogStorage.logMessage('Error - $e');
     }
   }
 
@@ -162,8 +176,7 @@ class Communication {
     while (_buffer.isNotEmpty) {
       // Ensure start byte is correct
       while (_buffer.isNotEmpty && _buffer[0] != 0xAA) {
-        print(
-            '❌ Invalid start byte: ${_buffer[0].toRadixString(16)}. Discarding...');
+        LogStorage.logMessage('❌ Invalid start byte: ${_buffer[0].toRadixString(16)}. Discarding...');
         _buffer.removeAt(0);
         await Future.delayed(
             Duration(milliseconds: 10)); // Allow async processing
@@ -180,7 +193,7 @@ class Communication {
       if (_buffer.length >= expectedLength) {
         // We received enough bytes, check the end byte
         if (_buffer[expectedLength - 1] != 0xDD) {
-          print('❌ Error: Invalid end byte, discarding entire buffer.');
+          LogStorage.logMessage('❌ Error: Invalid end byte, discarding entire buffer.');
           _buffer.clear();
           return;
         }
@@ -189,8 +202,8 @@ class Communication {
         List<int> message = _buffer.sublist(0, expectedLength);
         _buffer.removeRange(0, expectedLength);
 
-        print(
-            '✅ Complete Message Received: ${message.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
+        LogStorage.logMessage('✅ Complete Message Received: ${message.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
 
         await _processMessage(Uint8List.fromList(message));
 
@@ -198,8 +211,9 @@ class Communication {
         _buffer.clear();
       } else if (_buffer.contains(0xDD)) {
         // ❌ If `0xDD` is found early and length is invalid, clear buffer
-        print(
-            '❌ Error: Found end byte `0xDD` but length is invalid. Clearing buffer.');
+
+        LogStorage.logMessage('${currentDateTime}:❌ Error: Found end byte `0xDD` but length is invalid. Clearing buffer.');
+
         _buffer.clear();
         return;
       } else {
@@ -400,67 +414,68 @@ class Communication {
     //AA 05 02 01 85 17 94 DD
 
     //AA 05 01 19 00 00 1D DD
+    LogStorage.logMessage('Processing message >>> ${message.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
 
-    print(
-        'Processing message: ${message.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
     await Future.delayed(
         Duration(milliseconds: 10)); // Simulate async processing
     final Uint8List data;
 
     data = message;
     //Polling
+    LogStorage.logMessage('Data >>> ${data}');
 
     if (_listEquals(data, aftersoldout)) {
       await _port!.write(aftersoldoutres);
       await Future.delayed(Duration(milliseconds: 200));
       await _port!.write(aftersoldoutres2);
-      print(
-          'OUT >>>: ${aftersoldoutres.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
-    } else if (_listEquals(data, pollingPCB)) {
-      print('Expected response received (polling). Sending reply...');
 
+      LogStorage.logMessage('Android OUT >>>: ${aftersoldoutres.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
+    } else if (_listEquals(data, pollingPCB)) {
+      LogStorage.logMessage('Expected response received (polling). Sending reply...');
       // Send the reply message
       await _port!.write(pcToPollingPCB);
-      print(
-          'OUT >>>: ${pcToPollingPCB.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
+      LogStorage.logMessage('Android OUT >>>: ${pcToPollingPCB.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       await Future.delayed(Duration(milliseconds: 200));
       await _port!.write(aftersoldoutres2);
-      print(
-          'OUT >>>: ${aftersoldoutres2.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
+      LogStorage.logMessage('Android OUT >>>: ${aftersoldoutres2.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
     }
 
     //status1
     else if (_listEquals(data, status1Request)) {
-      print('Expected response received (status 1). Sending reply...');
+      LogStorage.logMessage('List Equal = ${_listEquals(data, status1Request)}');
+      LogStorage.logMessage('Expected response received (status 1). Sending reply...');
 
       if (isQr == false && isDispenseCash == false) {
         myHomePageKey.currentState?.setLatestFailedTrx();
       }
       // Send the reply message
       _port!.write(statusResponse);
-      print(
-          'OUT >>>: ${statusResponse.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      LogStorage.logMessage('Android OUT >>>: ${statusResponse.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
     }
     //status2
     //status1
     else if (_listEquals(data, status2Request)) {
-      print('Expected response received (status 2). Sending reply...');
+      LogStorage.logMessage('The Hex are not Equal:  ${_listEquals(data, status2Request)}');
+      LogStorage.logMessage('Expected response received (status 2). Sending reply...');
 
       // Send the reply message
       _port!.write(statusResponse);
-      print(
-          'OUT >>>: ${statusResponse.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      LogStorage.logMessage('Android OUT >>>: ${statusResponse.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
     }
 
     //Req
     else if (_listEquals(data, ReqResponse)) {
-      print('Expected response received (reqDis). Sending reply...');
+      LogStorage.logMessage('The Hex are not Equal:  ${_listEquals(data, ReqResponse)}');
+      LogStorage.logMessage('Expected response received (request_Dispense). Sending reply...');
 
       final discom = await createDispenseCommand();
       // Send the reply message
       _port!.write(discom);
-      print(
-          'OUT >>>: ${discom.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      LogStorage.logMessage('Android OUT >>>: ${discom.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
     } else if (data.length >= 18 &&
         data[0] == 0xAA &&
         data[1] == 0x0F &&
@@ -468,18 +483,21 @@ class Communication {
         data[3] == 0x14 &&
         data[4] == 0x1C &&
         data[5] == 0x03) {
-      print('Expected response received (soldout). Sending reply...');
+
+      LogStorage.logMessage('Expected response received (soldout). Sending reply...');
+
       isSoldOut = true;
       isDispensing = false;
       myHomePageKey.currentState?.setSoldout();
 
       if (isQr == false) {
+        LogStorage.logMessage('isQR = $isQr');
         myHomePageKey.currentState?.InsertCash('Failed', 0, 0, 0, 0);
       }
       // Send the reply message
       _port!.write(resSoldOut2);
-      print(
-          'OUT >>>: ${resSoldOut2.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      LogStorage.logMessage('Android OUT >>>: ${resSoldOut2.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
     }
 
     // Dispensing Check if the response starts with the valid start byte
@@ -489,7 +507,8 @@ class Communication {
         data[2] == 0x02 &&
         data[3] == 0xD1 &&
         data[4] == 0x20) {
-      print("Dispensing.");
+      LogStorage.logMessage('Dispensing.');
+
       isDispensing = true;
       // Check if the response length is correct
       if (data.length == 15) {
@@ -504,15 +523,17 @@ class Communication {
         int RemainingtoDispense = data[11] | (data[12] << 8); // 12th-13th byte
 
         // Print decoded values
-        print("Cash Value: $cashValue");
-        print("Total Needed to Dispense: $totalNeeded");
-        print("Remaining to Dispense: $RemainingtoDispense");
+
+        LogStorage.logMessage('Cash Value: $cashValue');
+        LogStorage.logMessage('Total Needed to Dispense: $totalNeeded');
+        LogStorage.logMessage('Remaining to Dispense: $RemainingtoDispense');
+
 
         RemainingtoDispenseG = RemainingtoDispense;
         // Send the reply message
         _port!.write(dispensing);
-        print(
-            'OUT >>>: ${dispensing.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
+        LogStorage.logMessage('Android OUT >>>: ${dispensing.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
         // if(RemainingtoDispense == 0 && cashValue == 0)
         //   {
         //     isCompleteDispense = true;
@@ -522,12 +543,13 @@ class Communication {
           myHomePageKey.currentState?.InsertCash('Dispensing', 0, 0, 0, 0);
           isDispenseCash = true;
           cashValue_ = cashValue;
-          print('cash dispensing true');
+          LogStorage.logMessage('cash dispensing true');
         }
 
         myHomePageKey.currentState?.remainingToDispense(RemainingtoDispense);
+        LogStorage.logMessage('Remaining to Dispense >>> $RemainingtoDispense');
       } else {
-        print("Invalid response length.");
+        LogStorage.logMessage('Invalid response length.');
       }
     }
     //UTD QR
@@ -537,7 +559,8 @@ class Communication {
         data[2] == 0x02 &&
         data[3] == 0xD1 &&
         data[4] == 0x05) {
-      print("Dispensed, QR UTD here.");
+
+      LogStorage.logMessage('Stages >>> Dispensed, QR UTD.');
       isDispensing = false;
       // Check if the response length is correct
 
@@ -550,17 +573,19 @@ class Communication {
           (data[19] << 24); // Correct byte order for little-endian
 
       // Print decoded values
-      print("Qr Dispense Counter: $QRDispenseCounter");
-      print("UTD qr Dispense Counter: $UTDQRDispenseCounter");
+      LogStorage.logMessage('Qr Dispense Counter >>> $QRDispenseCounter');
+      LogStorage.logMessage('UTD QR Dispense Counter >>> $UTDQRDispenseCounter');
 
       // Send the reply message
       _port!.write(qrteldis);
-      print(
-          'OUT >>>: ${qrteldis.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      LogStorage.logMessage('Android OUT >>>: ${qrteldis.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
 
       totalUtdQr = UTDQRDispenseCounter;
 
+      LogStorage.logMessage('totalUtdQr >>>: ${totalUtdQr}');
+
       if (QRDispenseCounter > 0) {
+        LogStorage.logMessage('QRDispenseCounter >>> ${QRDispenseCounter}');
         isCompleteDispense = true;
       }
     }
@@ -576,7 +601,10 @@ class Communication {
           .map((byte) =>
               '0x${byte.toRadixString(16).padLeft(2, '0').toUpperCase()}')
           .join(' ');
-      print("Dispensed, Cash UTD here.");
+
+      LogStorage.logMessage('Stage >>> Dispensed, Cash UTD here.');
+      LogStorage.logMessage('Data Length >>> ${data.length})');
+
       isDispenseCash = true;
       isDispensing = false;
       // Check if the response length is correct
@@ -600,15 +628,15 @@ class Communication {
             (data[25] << 24); // 10th-11th byte
 
         // Print decoded values
-        print("Cash Dispense Counter: $CASHDispenseCounter");
-        print("UTD Cash Dispense Counter: $UTDCASHDispenseCounter");
-        print("Cash Counter: $CASHCounter");
-        print("UTD Cash Counter: $UTDCASHCounter");
+        LogStorage.logMessage('Cash Dispense Counter >>> $CASHDispenseCounter');
+        LogStorage.logMessage('UTD Cash Dispense Counter >>> $UTDCASHDispenseCounter');
+        LogStorage.logMessage('Cash Counter >>> $CASHCounter');
+        LogStorage.logMessage('UTD Cash Counter >>> $UTDCASHCounter');
 
         // Send the reply message
         _port!.write(cashteldis);
-        print(
-            'OUT >>>: ${cashteldis.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+        LogStorage.logMessage('Android OUT >>>: ${cashteldis.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
         if (CASHDispenseCounter > 0 && UTDCASHDispenseCounter > 0) {
           myHomePageKey.currentState?.InsertCash(
               'Completed',
@@ -617,14 +645,15 @@ class Communication {
               CASHDispenseCounter,
               UTDCASHCounter);
           isCompleteDispense = true;
+          LogStorage.logMessage('cash dispense complete true');
 
-          print('cash dispense complete true');
           CASHDispenseCounter_ = CASHDispenseCounter;
           CashCounter = CASHCounter;
           UtdCash = UTDCASHDispenseCounter;
         }
       } else {
-        print("Invalid response length.");
+        LogStorage.logMessage('Invalid response length.');
+
       }
     }
     //req res
@@ -642,31 +671,34 @@ class Communication {
         data[9] == 0x66 &&
         data[10] == sentreqcommand[10]) {
       if (data[13] == 0x01) {
-        print("Mother board receive signal and dispense");
+
+        LogStorage.logMessage('Mother board receive signal and dispense');
       } else {
-        print("Mother board not able receive signal and dispense");
+        LogStorage.logMessage('Mother board not able receive signal and dispense');
       }
-      print("Accepted request receive ");
+      LogStorage.logMessage('Accepted request receive');
+      // print("Accepted request receive ");
     } else if (_listEquals(data, aftersoldoutaccept2)) {
       print('new ***');
+      LogStorage.logMessage(' The Hex are not Equal >>> ${_listEquals(data, aftersoldoutaccept2)}');
     } else {
-      print("Unknown Comm detected");
+      LogStorage.logMessage('Unknown Communication detected');
+      //print("Unknown Comm detected");
       unknownReply[3] = data[3];
       _port!.write(unknownReply);
-      print(
-          'OUT >>>: ${unknownReply.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      LogStorage.logMessage('Android OUT >>>: ${unknownReply.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
     }
   }
 
   Future<void> listenForResponse() async {
     // SerialPortReader reader = SerialPortReader(port);
     // Stream<Uint8List> responseStream = reader.stream;
-    print('Start Listening...');
+    LogStorage.logMessage('Start Listening');
     // Define the expected request and the response
 
     _port!.inputStream?.listen((Uint8List data) async {
-      print(
-          'IN: <<< ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}'); // Print hex data
+      LogStorage.logMessage('MainBoard IN: <<< ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
       _handleIncomingData(data);
     });
   }
@@ -690,7 +722,8 @@ class Communication {
     ]);
 
     dispenseAmount = amount;
-    print('Sending RequestDispense20');
+    LogStorage.logMessage('Sending RequestDispense20 || dispenseAmount >>> $dispenseAmount');
+
     await sendData(requestDispense);
 
     const int maxRetries = 30; // Maximum retries
@@ -702,7 +735,9 @@ class Communication {
         // If isCompleteDispense becomes true, return 'Completed'
         isCompleteDispense = false; // Reset the flag for future operations
         isQr = false;
-        print('after result return $totalUtdQr');
+
+        LogStorage.logMessage('maxRetries >>> $maxRetries || retries >>> $retries after result return $totalUtdQr');
+
         return Result(success: true, message: '0', utdQr: totalUtdQr);
       }
 
@@ -710,13 +745,14 @@ class Communication {
         isSoldOut = false;
         isCompleteDispense = false;
         isQr = false;
-
+        LogStorage.logMessage('isSoldOut >>> $isSoldOut');
         return Result(success: false, message: '1', utdQr: 0);
       }
 
       // Wait for the specified interval before retrying
       await Future.delayed(Duration(milliseconds: 2000));
       retries++;
+      LogStorage.logMessage('$retries');
     }
 
     isQr = false;
@@ -750,7 +786,8 @@ class Communication {
 
       await sendData(requestDispense);
     } else {
-      print('Unknown command');
+
+      LogStorage.logMessage('Unknown command');
     }
 
     // Optional: Disconnect after communication
@@ -766,13 +803,16 @@ class Communication {
       //   {
       //     isCompleteDispense = true;
       //   }
+      LogStorage.logMessage('maxRetries >>> $maxRetries || retries >>> $retries');
+
       if (isCompleteDispense) {
         // If isCompleteDispense becomes true, return 'Completed'
         isCompleteDispense = false; // Reset the flag for future operations
         isQr = false;
         isDispensing = false;
         // RemainingtoDispenseG = 9999;
-        print('after result return $totalUtdQr');
+        LogStorage.logMessage('Status Complete Dispense >>> $isCompleteDispense');
+        LogStorage.logMessage('After result return $totalUtdQr');
         return Result(success: true, message: '0', utdQr: totalUtdQr);
       }
 
@@ -798,6 +838,7 @@ class Communication {
 
     // If retries exceed maxRetries, return 'Failed'
     // message: 2 is refund , 3 no refund
+    LogStorage.logMessage('Message = isDispensing >>> $isDispensing [IF isDispensing = 2 mean Refund and 3 mean No Refund]');
     return Result(success: false, message: isDispensing ? '3' : '2', utdQr: 0);
   }
 
@@ -841,8 +882,8 @@ class Communication {
 
     command[13] = dispenseAmount & 0xFF; // Extract lower 8 bits
     command[14] = (dispenseAmount >> 8) & 0xFF; // Extract upper 8 bits
-    print('dispense amount $dispenseAmount');
 
+    LogStorage.logMessage(' Dispense amount >>> $dispenseAmount');
     // Recalculate checksum using XOR from index 1 to index 14 (excluding the checksum byte)
     int checksum = command.sublist(1, 15).reduce((a, b) => a ^ b);
 
