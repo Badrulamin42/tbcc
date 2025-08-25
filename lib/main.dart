@@ -1002,7 +1002,7 @@ class _MyHomePageState extends State<MyHomePage> {
     // Platform messages may fail, so we use a try/catch PlatformException.
     try {
       result = await _connectivity.checkConnectivity();
-      print('internet : $result');
+      // print('internet : $result');
     } on PlatformException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Couldn\'t check connectivity status: $e')),
@@ -1259,7 +1259,7 @@ class _MyHomePageState extends State<MyHomePage> {
       Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
       String token = parsedJson['data'][0]['token'];
 
-      print('request token success');
+      // print('request token success');
       final responseSetDeviceError = http.post(
         Uri.parse(apiUrl),
         headers: {
@@ -2245,7 +2245,6 @@ class _MyHomePageState extends State<MyHomePage> {
     int? amount =
         int.tryParse(selectedAmount.split('.')[0]); // Extract integer part
 
-    print('amount tah ye : $amount');
     // Search in coinPriceList
     for (var item in coinPriceList) {
       if (item['price'] == amount) {
@@ -2268,6 +2267,16 @@ class _MyHomePageState extends State<MyHomePage> {
       remainingTodispenseAm = amounttodis!;
       remainingTodispenseLast = amounttodis;
     });
+    var log = """
+                Get Status
+                OUT: >>> aa 04 01 d1 04 d0 dd
+                IN: <<< aa 0c 02 d1 04 3a 1c 04 00 8f 21 0a 00 5d dd
+                Total Cash UTD: ${communication.TotalCash_}
+                Token Dispense UTD: ${communication.TotalToken_}
+                \n\n
+               
+                """;
+
     final PaymentPayloadtrx = {
       "commandcode": "DI_SetTransactionEWalletV2",
       "devicecode": deviceCode,
@@ -2276,7 +2285,7 @@ class _MyHomePageState extends State<MyHomePage> {
           "machineid": machineId,
           "statusstarttime": Datetime,
           "status": "Payment",
-          "eutdcounter": UTDQR,
+          "eutdcounter": communication.TotalToken_,
           "eamount": selectedAmount,
           "eoriginalamount": selectedAmount,
           "qrcode": "Remainingtoken : ${remainingTodispenseAm}",
@@ -2289,7 +2298,8 @@ class _MyHomePageState extends State<MyHomePage> {
           "ewallettestusercode": "",
           "slot": "55",
           "responsetime": "1",
-          "rssi": "114"
+          "rssi": "114",
+          "log": log
         }
       ]
     };
@@ -2318,10 +2328,36 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     //success trx
-    print('before send trx success $UTDQR');
+    // print('before send trx success $UTDQR');
 
     bool resultdis = await sendData(amounttodis!);
-
+    var log2 = """
+                Get Status
+                OUT: >>> aa 04 01 d1 04 d0 dd
+                IN: <<< aa 0c 02 d1 04 3a 1c 04 00 8f 21 0a 00 5d dd
+                Total Cash UTD: ${communication.TotalCashPrev_}
+                Token Dispense UTD: ${communication.TotalTokenPrev_}
+                \n\n
+                QR request dispense
+                OUT >>>:  ${communication.HexQrRequestDispenseOUT}
+                IN: <<< ${communication.HexQrRequestDispenseIN}
+                Allow dispense : ${communication.isAllowed}
+                 \n\n
+                 
+                QR dispense amount ${amounttodis}
+                OUT >>>: ${communication.HexQrDispenseOUT}
+                IN: <<< ${communication.HexQrDispenseIN}
+                Allow dispense : ${communication.isAllowed}
+                \n\n
+                
+                ${communication.AlllogsDispensing}
+                
+                Get Status
+                OUT: >>> aa 04 01 d1 04 d0 dd
+                IN: <<< aa 0c 02 d1 04 3a 1c 04 00 8f 21 0a 00 5d dd
+                Total Cash UTD: ${communication.TotalCash_}
+                Token Dispense UTD: ${communication.TotalToken_}
+                """;
     final SuccessPaymentPayloadtrx = {
       "commandcode": "DI_SetTransactionEWalletV2",
       "devicecode": deviceCode,
@@ -2330,7 +2366,7 @@ class _MyHomePageState extends State<MyHomePage> {
           "machineid": machineId,
           "statusstarttime": Datetime,
           "status": "Success",
-          "eutdcounter": UTDQR,
+          "eutdcounter": communication.TotalToken_,
           "eamount": selectedAmount,
           "eoriginalamount": selectedAmount,
           "qrcode": "Remainingtoken : ${remainingTodispenseAm}",
@@ -2343,10 +2379,13 @@ class _MyHomePageState extends State<MyHomePage> {
           "ewallettestusercode": "",
           "slot": "55",
           "responsetime": "1",
-          "rssi": "114"
+          "rssi": "114",
+          "log": log2
         }
       ]
     };
+
+    communication.ResetLogDispensing();
 
     if (resultdis || amounttodis == 0) {
       setState(() {
@@ -2384,7 +2423,6 @@ class _MyHomePageState extends State<MyHomePage> {
     else {
       setState(() {
         FailedDispense = true;
-
         ClosingCall = false;
       });
 
@@ -2400,7 +2438,7 @@ class _MyHomePageState extends State<MyHomePage> {
       });
     });
 
-    print('closingstatement being called');
+    // print('closingstatement being called');
   }
 
 //mqtt
@@ -2607,7 +2645,7 @@ class _MyHomePageState extends State<MyHomePage> {
           if (item is Map<String, dynamic>) {
             // Extract required fields
             final data = item['data'] ?? {};
-            print('mqtt item : $item');
+            // print('mqtt item : $item');
 
             if (item['commandcode'] == 'SetPing') {
               String trxid = data['transactionid'];
@@ -2717,7 +2755,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
               break;
             } else {
-              print('Wrong Reference ID!!!');
+              // print('Wrong Reference ID!!!');
             }
           }
         }
@@ -2877,7 +2915,7 @@ class _MyHomePageState extends State<MyHomePage> {
       );
 
       if (responseTRXEW.statusCode == 200) {
-        print('Transaction cancelled successfully');
+        // print('Transaction cancelled successfully');
 
         if (errorMsg == 'Timeout') {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -2905,7 +2943,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }) async {
     String referenceId = generateReferenceId();
 
-    print('qr started');
+    // print('qr started');
     try {
       setLoading(true);
 
@@ -2957,7 +2995,7 @@ class _MyHomePageState extends State<MyHomePage> {
         final privateKeyPem = await loadPrivateKey();
 
         String signature = await generateSignature(jsonEncode(payload), key);
-        print('request qr');
+        // print('request qr');
         final response = await http.post(
           Uri.parse(apiUrl),
           headers: {
@@ -2969,7 +3007,7 @@ class _MyHomePageState extends State<MyHomePage> {
         );
         //
         final QrResponseData = json.decode(response.body);
-        print('get the data QR : $QrResponseData');
+        // print('get the data QR : $QrResponseData');
         Map<String, dynamic> qrparsedJson = jsonDecode(response.body);
         String qrcode = qrparsedJson['data'][0]['qrcode'] ?? null;
         String refid = qrparsedJson['data'][0]['referenceid'] ?? null;
@@ -2996,6 +3034,15 @@ class _MyHomePageState extends State<MyHomePage> {
         setState(() {
           refId = refid; // Save the generated QR code URL
         });
+
+        var log = """
+                Get Status
+                OUT: >>> aa 04 01 d1 04 d0 dd
+                IN: <<< aa 0c 02 d1 04 3a 1c 04 00 8f 21 0a 00 5d dd
+                Total Cash UTD: ${communication.TotalCash_}
+                Token Dispense UTD: ${communication.TotalToken_}
+                """;
+
         final SetTrxEWpayload = {
           "commandcode": "DI_SetTransactionEWalletV2",
           "devicecode": deviceCode,
@@ -3004,7 +3051,7 @@ class _MyHomePageState extends State<MyHomePage> {
               "statusstarttime": getFormattedDateTime(),
               "machineid": "TCN Office",
               "status": "Submit",
-              "eutdcounter": UTDQR,
+              "eutdcounter": communication.TotalToken_,
               "eamount": amount,
               "eoriginalamount": amount,
               "discount": "0",
@@ -3018,7 +3065,8 @@ class _MyHomePageState extends State<MyHomePage> {
               "errormessage": "",
               "ewallettestusercode": "",
               "responsetime": "2",
-              "rssi": "-39"
+              "rssi": "-39",
+              "log": log
             }
           ]
         };
