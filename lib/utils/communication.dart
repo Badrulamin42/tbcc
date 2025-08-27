@@ -33,8 +33,10 @@ class Communication {
   bool isCompleteDispense = false;
   bool isDispensing = false;
   int dispenseAmount = 0;
+  int cashValueAmount = 0;
   int RemainingtoDispenseG = 9999;
   int totalUtdQr = 0;
+  int QrDispenseCounterTel = 0;
   int UtdCash = 0;
   int CashCounter = 0;
   int cashValue_ = 0;
@@ -48,14 +50,24 @@ class Communication {
 
   bool isPrevFlag = true;
   bool isAllowed = false;
+
   int TotalCashPrev_ = 0;
   int TotalTokenPrev_ = 0;
+
+  String HexGetStatusIN = "";
+  String HexGetStatusOUT = "";
+
+  String HexGetStatusINPrev = "";
+  String HexGetStatusOUTPrev = "";
 
   String HexQrRequestDispenseIN = "";
   String HexQrRequestDispenseOUT = "";
 
   String HexQrDispenseIN = "";
   String HexQrDispenseOUT = "";
+
+  String HexQrDispenseTelemetryIN = "";
+  String HexQrDispenseTelemetryOUT = "";
 
   List<String> _logsDispensing = [];
   String AlllogsDispensing = "";
@@ -182,6 +194,8 @@ class Communication {
 
     print(
         'OUT >>>: ${newcommand.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+    HexGetStatusOUTPrev =
+        newcommand.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
 
     await _port!.write(newcommand);
     await Future.delayed(Duration(milliseconds: 500));
@@ -526,12 +540,18 @@ class Communication {
       TotalToken_ = tokenDispenseUTD;
 
       if (isPrevFlag) {
+        HexGetStatusINPrev =
+            data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
         TotalCashPrev_ = totalCashUTD;
-        TotalCashPrev_ = tokenDispenseUTD;
+        TotalTokenPrev_ = tokenDispenseUTD;
       }
       control = 1;
       print(
           'IN <<<: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
+      HexGetStatusIN =
+          data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
+
       await Future.delayed(Duration(milliseconds: 200));
       control = await 0;
       print("Total Cash UTD: $totalCashUTD");
@@ -575,8 +595,14 @@ class Communication {
       print('');
       print('');
       print('');
+
       final discom = await createDispenseCommand();
+
       _port!.write(discom);
+
+      HexQrDispenseOUT =
+          discom.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
+
       print(
           'OUT >>>: ${discom.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
     }
@@ -672,16 +698,13 @@ class Communication {
         //     isCompleteDispense = true;
         //   }
 
-        _addLog("Dispensing.");
-        _addLog(
-            'IN <<< ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
-        _addLog(
-            'OUT >>>: ${dispensing.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
-        _addLog("Cash Value: $cashValue");
-        _addLog("Total Needed: $totalNeeded");
-        _addLog("Remaining: $RemainingtoDispense");
-        _addLog("\n");
-        _addLog("\n");
+        _addLog("Dispensing.\n\n"
+            " IN <<< ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}\n"
+            "OUT >>>: ${dispensing.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}\n"
+            "Cash Value: $cashValue\n"
+            "Total Needed: $totalNeeded\n"
+            "Remaining: $RemainingtoDispense\n"
+            "\n\n");
 
         if (RemainingtoDispense > 0 && cashValue > 0) {
           myHomePageKey.currentState?.InsertCash('Dispensing', 0, 0, 0, 0);
@@ -711,6 +734,8 @@ class Communication {
           'IN: <<< ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}'); // Print hex data
       isDispensing = false;
       // Check if the response length is correct
+      HexQrDispenseTelemetryIN =
+          data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
 
       // Decode dynamic data
       int QRDispenseCounter = data[14] | (data[15] << 8);
@@ -726,10 +751,14 @@ class Communication {
 
       // Send the reply message
       _port!.write(qrteldis);
+
       print(
           'OUT >>>: ${qrteldis.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      HexQrDispenseTelemetryOUT =
+          qrteldis.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
 
       totalUtdQr = UTDQRDispenseCounter;
+      QrDispenseCounterTel = QRDispenseCounter;
 
       if (QRDispenseCounter > 0) {
         isCompleteDispense = true;
@@ -904,7 +933,7 @@ class Communication {
   }
 
   // Main function to control the flow of communication
-  Future<Result> main(int command) async {
+  Future<Result> main(int command, int cashValue) async {
     isPrevFlag = true;
     isQr = true;
     isDispensing = false;
@@ -944,7 +973,7 @@ class Communication {
     // Send data based on command
     if (command > 0) {
       dispenseAmount = command;
-
+      cashValueAmount = cashValue;
       await sendData(requestDispense);
     } else {
       print('Unknown command');
@@ -967,6 +996,10 @@ class Communication {
 
         print(
             'OUT >>>: ${newcommand.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+        HexGetStatusOUT = newcommand
+            .map((e) => e.toRadixString(16).padLeft(2, '0'))
+            .join(' ');
+
         isPrevFlag = await false;
         await _port!.write(newcommand);
         await Future.delayed(Duration(milliseconds: 200));
@@ -985,14 +1018,22 @@ class Communication {
 
         if (TotalToken_ > TotalTokenPrev_) {
           print('');
-          print('Total Token: ${TotalToken_}');
-          print('Previous Total Token: ${TotalTokenPrev_}');
+          int dispensedtoken = TotalToken_ - TotalTokenPrev_;
           return Result(success: true, message: '0', utdQr: totalUtdQr);
+
+          // if (dispenseAmount == dispensedtoken) {
+          //   // exactly amount of token dispense based on user request
+          //   return Result(success: true, message: '0', utdQr: totalUtdQr);
+          // } else {
+          //   //assume soldout, partial dispense, after complete dispense utd is updated(increased)
+          //   // but not all
+          //   return Result(success: false, message: '1', utdQr: 0);
+          // }
         } else {
           print('');
           print('');
-          print('Total Token: ${TotalToken_}');
-          print('Previous Total Token: ${TotalTokenPrev_}');
+          // print('Total Token: ${TotalToken_}');
+          // print('Previous Total Token: ${TotalTokenPrev_}');
           return Result(success: false, message: '2', utdQr: totalUtdQr);
         }
       }
@@ -1060,7 +1101,7 @@ class Communication {
     command[13] = dispenseAmount & 0xFF; // Extract lower 8 bits
     command[14] = (dispenseAmount >> 8) & 0xFF; // Extract upper 8 bits
 
-    int scaledAmount = dispenseAmount * 100;
+    int scaledAmount = cashValueAmount * 100;
 
     command[11] = scaledAmount & 0xFF; // lower 8 bits
     command[12] = (scaledAmount >> 8) & 0xFF; // upper 8 bits

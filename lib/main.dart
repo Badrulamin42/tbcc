@@ -267,6 +267,7 @@ class _MyHomePageState extends State<MyHomePage> {
       isLoadingboot = true;
     });
     print('initState called');
+    // resetsaveSoldout(true);
     loadSoldoutStatus();
     mqttConn(); // call mqtt
     initConnectivity();
@@ -427,6 +428,13 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       _macAddress = mac ?? "Unknown";
     });
+  }
+
+  Future<void> resetsaveSoldout(bool isQrPayment) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isLatestSoldout', false); // Mark as sold out
+    await prefs.setBool('isLatestQR', true); // Store QR payment status
+    await prefs.setInt('remainingtoken', 0);
   }
 
   Future<void> saveSoldout(bool isQrPayment) async {
@@ -2288,7 +2296,7 @@ class _MyHomePageState extends State<MyHomePage> {
           "eutdcounter": communication.TotalToken_,
           "eamount": selectedAmount,
           "eoriginalamount": selectedAmount,
-          "qrcode": "Remainingtoken : ${remainingTodispenseAm}",
+          "qrcode": "",
           "ewallettransactionid": refId,
           "ewallettypecode": "DUITNOW",
           "numberofinquiry": "0",
@@ -2299,7 +2307,7 @@ class _MyHomePageState extends State<MyHomePage> {
           "slot": "55",
           "responsetime": "1",
           "rssi": "114",
-          "log": log
+          // "log": log
         }
       ]
     };
@@ -2330,11 +2338,11 @@ class _MyHomePageState extends State<MyHomePage> {
     //success trx
     // print('before send trx success $UTDQR');
 
-    bool resultdis = await sendData(amounttodis!);
+    bool resultdis = await sendData(amounttodis!, amount!);
     var log2 = """
                 Get Status
-                OUT: >>> aa 04 01 d1 04 d0 dd
-                IN: <<< aa 0c 02 d1 04 3a 1c 04 00 8f 21 0a 00 5d dd
+                OUT: >>> ${communication.HexGetStatusOUTPrev}
+                IN: <<< ${communication.HexGetStatusINPrev}
                 Total Cash UTD: ${communication.TotalCashPrev_}
                 Token Dispense UTD: ${communication.TotalTokenPrev_}
                 \n\n
@@ -2352,9 +2360,16 @@ class _MyHomePageState extends State<MyHomePage> {
                 
                 ${communication.AlllogsDispensing}
                 
+                QR dispense telemetry
+                OUT >>>: ${communication.HexQrDispenseTelemetryIN}
+                IN: <<< ${communication.HexQrDispenseTelemetryOUT}
+                Qr Dispense Counter: ${communication.QrDispenseCounterTel}
+                UTD qr Dispense Counter: ${communication.totalUtdQr}
+                \n\n
+                
                 Get Status
-                OUT: >>> aa 04 01 d1 04 d0 dd
-                IN: <<< aa 0c 02 d1 04 3a 1c 04 00 8f 21 0a 00 5d dd
+                OUT: >>> ${communication.HexGetStatusOUT}
+                IN: <<< ${communication.HexGetStatusIN}
                 Total Cash UTD: ${communication.TotalCash_}
                 Token Dispense UTD: ${communication.TotalToken_}
                 """;
@@ -2369,7 +2384,7 @@ class _MyHomePageState extends State<MyHomePage> {
           "eutdcounter": communication.TotalToken_,
           "eamount": selectedAmount,
           "eoriginalamount": selectedAmount,
-          "qrcode": "Remainingtoken : ${remainingTodispenseAm}",
+          "qrcode": "",
           "ewallettransactionid": refId,
           "ewallettypecode": "DUITNOW",
           "numberofinquiry": "0",
@@ -2384,8 +2399,6 @@ class _MyHomePageState extends State<MyHomePage> {
         }
       ]
     };
-
-    communication.ResetLogDispensing();
 
     if (resultdis || amounttodis == 0) {
       setState(() {
@@ -2430,6 +2443,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     await Future.delayed(Duration(seconds: 2), () {
+      communication.ResetLogDispensing();
       setState(() {
         ReceivedPayment = false;
         CompletedDispense = false;
@@ -2776,8 +2790,8 @@ class _MyHomePageState extends State<MyHomePage> {
   late Communication communication;
   // Connect to the port once
 
-  Future<bool> sendData(int command) async {
-    Result? result = await communication.main(command);
+  Future<bool> sendData(int command, int cashValue) async {
+    Result? result = await communication.main(command, cashValue);
 
     if (result.success == true) {
       print('after result return ${result.utdQr.toString()}');
@@ -3066,7 +3080,7 @@ class _MyHomePageState extends State<MyHomePage> {
               "ewallettestusercode": "",
               "responsetime": "2",
               "rssi": "-39",
-              "log": log
+              // "log": log
             }
           ]
         };
