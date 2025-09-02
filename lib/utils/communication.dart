@@ -53,6 +53,7 @@ class Communication {
 
   int TotalCashPrev_ = 0;
   int TotalTokenPrev_ = 0;
+  int SoldOutRemainingCoin = 0;
 
   String HexGetStatusIN = "";
   String HexGetStatusOUT = "";
@@ -69,9 +70,21 @@ class Communication {
   String HexQrDispenseTelemetryIN = "";
   String HexQrDispenseTelemetryOUT = "";
 
+  String HexSoldOutIN = "";
+  String HexSoldOutOUT = "";
+
+  bool IsPCBAlive = true;
+  int RetriesPCBAlive = 0;
+
+  int MainRetries = 0;
+  bool IsGetStatusReceive = false;
+
   List<String> _logsDispensing = [];
   String AlllogsDispensing = "";
   List<int> sentreqcommand = [];
+
+  List<String> _logsGetStatus = [];
+  String AlllogsGetStatus = "";
 
   //init
   Communication(UsbDevice? testPort) {
@@ -152,9 +165,45 @@ class Communication {
     }
   }
 
+  void _addGetStatusLog(String message) {
+    _logsGetStatus.add(message);
+    if (_logsGetStatus.length > 200) {
+      _logsGetStatus.removeAt(0); // keep last 200 lines (avoid memory bloat)
+    }
+  }
+
   void ResetLogDispensing() {
     AlllogsDispensing = "";
     _logsDispensing = [];
+    _logsGetStatus = [];
+    TotalCashPrev_ = 0;
+    TotalTokenPrev_ = 0;
+    HexGetStatusIN = "";
+    HexGetStatusOUT = "";
+    HexGetStatusINPrev = "";
+    HexGetStatusOUTPrev = "";
+    HexQrRequestDispenseIN = "";
+    HexQrRequestDispenseOUT = "";
+    HexQrDispenseIN = "";
+    HexQrDispenseOUT = "";
+    HexQrDispenseTelemetryIN = "";
+    HexQrDispenseTelemetryOUT = "";
+    HexSoldOutIN = "";
+    HexSoldOutOUT = "";
+  }
+
+  void CheckPCBAlive() async {
+    const int maxRetries = 30; // Maximum retries
+    print('Start Checking Connection port');
+
+    // Retry until isCompleteDispense becomes true or retries exceed maxRetries
+    while (RetriesPCBAlive < maxRetries) {
+      await Future.delayed(Duration(milliseconds: 1000));
+      print('Counting : ${RetriesPCBAlive}');
+      RetriesPCBAlive++;
+    }
+
+    IsPCBAlive = false;
   }
 
   // Open the USB serial device
@@ -196,17 +245,38 @@ class Communication {
         'OUT >>>: ${newcommand.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
     HexGetStatusOUTPrev =
         newcommand.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
+    _addGetStatusLog("GET STATUS\n"
+        "OUT >>>: ${newcommand.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}\n"
+        "");
+    await Future.delayed(Duration(milliseconds: 250));
+    //retrial
+    const int maxRetries = 2; // Maximum retries
+    int retrygetstatus = 0; // Maximum retries
+    while (retrygetstatus < maxRetries) {
+      if (IsGetStatusReceive) {
+        await Future.delayed(Duration(milliseconds: 250));
+        print('QR Request Dispense');
+        await _port!.write(data);
+        print(
+            'OUT >>>: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
 
-    await _port!.write(newcommand);
-    await Future.delayed(Duration(milliseconds: 500));
+        HexQrRequestDispenseOUT =
+            data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
+      }
 
-    print('QR Request Dispense');
-    await _port!.write(data);
-    print(
-        'OUT >>>: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      await _port!.write(newcommand);
 
-    HexQrRequestDispenseOUT =
-        data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
+      _addGetStatusLog("Retry :${retrygetstatus}\n"
+          "OUT >>>: ${newcommand.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}"
+          "\n\n");
+      await Future.delayed(Duration(milliseconds: 2500));
+      retrygetstatus++;
+    }
+
+    if (retrygetstatus == 2) {
+      AlllogsGetStatus = _logsGetStatus.join("\n");
+      MainRetries = 30;
+    }
   }
 
   List<int> _buffer = [];
@@ -459,7 +529,7 @@ class Communication {
       0x00
     ]);
 
-    Uint8List aftersoldoutres2 = Uint8List.fromList([
+    Uint8List pcToPollingPCBres = Uint8List.fromList([
       0xAA,
       0x0B,
       0x01,
@@ -475,12 +545,8 @@ class Communication {
       0x7D,
       0xDD
     ]);
-    Uint8List aftersoldoutaccept2 =
+    Uint8List pcToPollingPCBresaccept =
         Uint8List.fromList([0xAA, 0x05, 0x02, 0x01, 0x85, 0x17, 0x94, 0xDD]);
-
-    //GET STATUS
-    Uint8List newcommand =
-        Uint8List.fromList([0xAA, 0x04, 0x01, 0xD1, 0x04, 0xD0, 0xDD]);
 
     // print(
     //     'Processing message: ${message.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
@@ -494,13 +560,14 @@ class Communication {
     if (_listEquals(data, aftersoldout)) {
       await _port!.write(aftersoldoutres);
       await Future.delayed(Duration(milliseconds: 200));
-      await _port!.write(aftersoldoutres2);
+      await _port!.write(pcToPollingPCBres);
       print(
           'OUT >>>: ${aftersoldoutres.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       print('');
     } else if (_listEquals(data, pollingPCB)) {
       print('Polling (PCB TO PC)');
       // Send the reply message
+      RetriesPCBAlive = 0;
       print(
           'IN <<<>: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       await _port!.write(pcToPollingPCB);
@@ -508,10 +575,10 @@ class Communication {
           'OUT >>>: ${pcToPollingPCB.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
 
       await Future.delayed(Duration(milliseconds: 200));
-      await _port!.write(aftersoldoutres2);
+      await _port!.write(pcToPollingPCBres);
       print('Polling (PC TO PCB)');
       print(
-          'OUT >>>: ${aftersoldoutres2.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+          'OUT >>>: ${pcToPollingPCBres.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       //
       // await Future.delayed(Duration(milliseconds: 200));
       // await _port!.write(newcommand);
@@ -538,6 +605,7 @@ class Communication {
 
       TotalCash_ = totalCashUTD;
       TotalToken_ = tokenDispenseUTD;
+      IsGetStatusReceive = true;
 
       if (isPrevFlag) {
         HexGetStatusINPrev =
@@ -551,6 +619,11 @@ class Communication {
 
       HexGetStatusIN =
           data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
+
+      _addGetStatusLog("GET STATUS\n"
+          "IN <<<: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}\n"
+          "Total Cash UTD: $totalCashUTD\n"
+          "Token Dispense UTD: $tokenDispenseUTD\n\n\n");
 
       await Future.delayed(Duration(milliseconds: 200));
       control = await 0;
@@ -650,11 +723,17 @@ class Communication {
       isDispensing = false;
       myHomePageKey.currentState?.setSoldout();
 
+      HexSoldOutIN =
+          data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
+
       if (isQr == false) {
         myHomePageKey.currentState?.InsertCash('Failed', 0, 0, 0, 0);
       }
       // Send the reply message
       _port!.write(resSoldOut2);
+
+      HexSoldOutOUT =
+          resSoldOut2.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
       print(
           'OUT >>>: ${resSoldOut2.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
     }
@@ -851,9 +930,9 @@ class Communication {
         print("Mother board not able receive signal and dispense");
       }
       print("Accepted request receive ");
-    } else if (_listEquals(data, aftersoldoutaccept2)) {
+    } else if (_listEquals(data, pcToPollingPCBresaccept)) {
       print(
-          'IN <<<: ${aftersoldoutaccept2.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+          'IN <<<: ${data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
       print('');
       print('');
     } else {
@@ -937,6 +1016,8 @@ class Communication {
     isPrevFlag = true;
     isQr = true;
     isDispensing = false;
+    IsGetStatusReceive = false;
+
     Uint8List requestDispense = Uint8List.fromList([
       0xAA,
       0x0A,
@@ -980,15 +1061,16 @@ class Communication {
     }
 
     const int maxRetries = 30; // Maximum retries
-    int retries = 0;
 
     // Retry until isCompleteDispense becomes true or retries exceed maxRetries
-    while (retries < maxRetries) {
+    while (MainRetries < maxRetries) {
       if (isCompleteDispense) {
         // If isCompleteDispense becomes true, return 'Completed'
         isCompleteDispense = false; // Reset the flag for future operations
         isQr = false;
         isDispensing = false;
+        IsGetStatusReceive = false;
+        MainRetries = 0;
 
         print('GET STATUS');
         Uint8List newcommand =
@@ -1000,7 +1082,8 @@ class Communication {
             .map((e) => e.toRadixString(16).padLeft(2, '0'))
             .join(' ');
 
-        isPrevFlag = await false;
+        isPrevFlag = false;
+
         await _port!.write(newcommand);
         await Future.delayed(Duration(milliseconds: 200));
 
@@ -1016,9 +1099,14 @@ class Communication {
         }
         AlllogsDispensing = allLogsDispensingTemp;
 
+        // +10
+        //      100             110
+        //      100             105
+        //      100             100
         if (TotalToken_ > TotalTokenPrev_) {
           print('');
           int dispensedtoken = TotalToken_ - TotalTokenPrev_;
+          SoldOutRemainingCoin = dispenseAmount - dispensedtoken;
           return Result(success: true, message: '0', utdQr: totalUtdQr);
 
           // if (dispenseAmount == dispensedtoken) {
@@ -1043,16 +1131,50 @@ class Communication {
         isCompleteDispense = false;
         isQr = false;
         isDispensing = false;
+        IsGetStatusReceive = false;
+        MainRetries = 0;
         // RemainingtoDispenseG = 9999;
+
+        print('GET STATUS');
+        Uint8List newcommand =
+            Uint8List.fromList([0xAA, 0x04, 0x01, 0xD1, 0x04, 0xD0, 0xDD]);
+
+        print(
+            'OUT >>>: ${newcommand.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+        HexGetStatusOUT = newcommand
+            .map((e) => e.toRadixString(16).padLeft(2, '0'))
+            .join(' ');
+
+        isPrevFlag = false;
+        await _port!.write(newcommand);
+        await Future.delayed(Duration(milliseconds: 200));
+
+        var logs = _logsDispensing;
+
+        String allLogsDispensingTemp;
+        if (logs.isEmpty) {
+          allLogsDispensingTemp = "";
+        } else if (logs.length == 1) {
+          allLogsDispensingTemp = logs.first;
+        } else {
+          allLogsDispensingTemp = [logs.first, logs.last].join("\n");
+        }
+        AlllogsDispensing = allLogsDispensingTemp;
+        // let say, rm 10 = 10 token
+        //      5             100          105
+        int dispensedtoken = TotalToken_ - TotalTokenPrev_;
+        //      5                 10               5
+        SoldOutRemainingCoin = dispenseAmount - dispensedtoken;
+
         return Result(success: false, message: '1', utdQr: 0);
       }
 
       // Wait for the specified interval before retrying
       await Future.delayed(Duration(milliseconds: 1000));
       if (isDispensing) {
-        retries = 0;
+        MainRetries = 0;
       } else {
-        retries++;
+        MainRetries++;
       }
     }
 

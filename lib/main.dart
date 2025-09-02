@@ -328,6 +328,7 @@ class _MyHomePageState extends State<MyHomePage> {
               isLoadingboot = false;
             });
           } else {
+            communication.CheckPCBAlive();
             _snackBar('Port Connected');
           }
         });
@@ -1222,10 +1223,6 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void Devicefaulty() async {
-    // if (isDeviceFaulty == true) {
-    //   return;
-    // }
-
     final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
 
     final payloadtoken = {
@@ -1245,16 +1242,46 @@ class _MyHomePageState extends State<MyHomePage> {
       body: json.encode(payloadtoken),
     );
 
+    var log = """
+                ${communication.AlllogsGetStatus}
+                \n\n
+                QR request dispense
+                OUT >>>:  ${communication.HexQrRequestDispenseOUT}
+                IN: <<< ${communication.HexQrRequestDispenseIN}
+                Allow dispense : ${communication.isAllowed}
+                 \n\n
+                 
+                QR dispense amount ${selectedAmount}
+                OUT >>>: ${communication.HexQrDispenseOUT}
+                IN: <<< ${communication.HexQrDispenseIN}
+                Allow dispense : ${communication.isAllowed}
+                \n\n
+                
+                ${communication.AlllogsDispensing}
+                
+                Soldout
+                IN: <<< ${communication.HexSoldOutIN}
+                OUT >>>: ${communication.HexSoldOutOUT}    
+                \n\n
+                
+                Get Status
+                OUT: >>> ${communication.HexGetStatusOUT}
+                IN: <<< ${communication.HexGetStatusIN}
+                Total Cash UTD: ${communication.TotalCash_}
+                Token Dispense UTD: ${communication.TotalToken_}
+                """;
+
     final setDeviceError = {
       "commandcode": "SetDeviceError",
       "devicecode": deviceCode,
       "data": [
         {
           "deviceerrorcode": 3,
-          "description": "Coin acceptor fault",
+          "description": "Soldout! Remaining token: ${remainingTodispenseAm}",
           "errorstart": getFormattedDateTime(),
           "errorend": "1900-JAN-01 00:00:00",
-          "rssi": "-99"
+          "rssi": "-99",
+          "log": log,
         }
       ]
     };
@@ -1278,6 +1305,7 @@ class _MyHomePageState extends State<MyHomePage> {
         body: json.encode(setDeviceError),
       );
       print('error sent, success');
+      communication.ResetLogDispensing();
     }
 
     await saveFailedTrx(refId!, selectedAmount, UTDQR);
@@ -2407,6 +2435,16 @@ class _MyHomePageState extends State<MyHomePage> {
         CompletedDispense = true;
       });
 
+      Future.delayed(Duration(seconds: 2), () {
+        communication.ResetLogDispensing();
+        setState(() {
+          ReceivedPayment = false;
+          CompletedDispense = false;
+          FailedDispense = false;
+          ClosingCall = false;
+        });
+      });
+
       // fetch success api
       String signature =
           await generateSignature(jsonEncode(SuccessPaymentPayloadtrx), key);
@@ -2439,18 +2477,16 @@ class _MyHomePageState extends State<MyHomePage> {
         ClosingCall = false;
       });
 
+      Future.delayed(Duration(seconds: 2), () {
+        communication.ResetLogDispensing();
+        setState(() {
+          ReceivedPayment = true;
+          CompletedDispense = false;
+          ClosingCall = false;
+        });
+      });
       //fetch refund api / cancel trx
     }
-
-    await Future.delayed(Duration(seconds: 2), () {
-      communication.ResetLogDispensing();
-      setState(() {
-        ReceivedPayment = false;
-        CompletedDispense = false;
-        FailedDispense = false;
-        ClosingCall = false;
-      });
-    });
 
     // print('closingstatement being called');
   }
@@ -2888,6 +2924,52 @@ class _MyHomePageState extends State<MyHomePage> {
       statustype = "Submit";
     }
 
+    var log = """
+                ${communication.AlllogsGetStatus}
+                \n\n
+                QR request dispense
+                OUT >>>:  ${communication.HexQrRequestDispenseOUT}
+                IN: <<< ${communication.HexQrRequestDispenseIN}
+                Allow dispense : ${communication.isAllowed}
+                 \n\n
+                 
+                QR dispense amount ${selectedAmount}
+                OUT >>>: ${communication.HexQrDispenseOUT}
+                IN: <<< ${communication.HexQrDispenseIN}
+                Allow dispense : ${communication.isAllowed}
+                \n\n
+                
+                ${communication.AlllogsDispensing}
+                
+                QR dispense telemetry
+                OUT >>>: ${communication.HexQrDispenseTelemetryIN}
+                IN: <<< ${communication.HexQrDispenseTelemetryOUT}
+                Qr Dispense Counter: ${communication.QrDispenseCounterTel}
+                UTD qr Dispense Counter: ${communication.totalUtdQr}
+                \n\n
+                              
+                Get Status
+                OUT: >>> ${communication.HexGetStatusOUT}
+                IN: <<< ${communication.HexGetStatusIN}
+                Total Cash UTD: ${communication.TotalCash_}
+                Token Dispense UTD: ${communication.TotalToken_}
+                """;
+
+    final setDeviceError = {
+      "commandcode": "SetDeviceError",
+      "devicecode": deviceCode,
+      "data": [
+        {
+          "deviceerrorcode": 3,
+          "description": "Timeout! Remaining token: ${remainingTodispenseAm}",
+          "errorstart": getFormattedDateTime(),
+          "errorend": "1900-JAN-01 00:00:00",
+          "rssi": "-99",
+          "log": log,
+        }
+      ]
+    };
+
     final privateKeyPem = await loadPrivateKey();
     final payloadcanceltrx = {
       "commandcode": "DI_SetTransactionEWalletV2",
@@ -2932,6 +3014,16 @@ class _MyHomePageState extends State<MyHomePage> {
         // print('Transaction cancelled successfully');
 
         if (errorMsg == 'Timeout') {
+          final responseSetDeviceError = http.post(
+            Uri.parse(apiUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'Token': Token,
+              'Signature': signature
+            },
+            body: json.encode(setDeviceError),
+          );
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -3823,6 +3915,37 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
+  //after booting
+  void _PortDisconnectDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible:
+          false, // Prevents closing the dialog when clicking outside
+      builder: (context) {
+        return AlertDialog(
+          title: const Text(
+            'Port Disconnected, Please fix and try restart until "Port Connected"',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min, // Ensures the dialog fits content
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Display error messages with better formatting
+              Text(
+                "Initialize Error: $ErrormsgInitConn\n\nConnection Error: $ErrormsgConn",
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(
+                  height: 16), // Add spacing between text and dropdown
+              // Dropdown for selecting available ports
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+//booting
   void _reConnectDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -4923,6 +5046,46 @@ class _MyHomePageState extends State<MyHomePage> {
                       ElevatedButton(
                         onPressed: () => _clearDataAndResetFlags(context),
                         child: const Text('Reset and Exit'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          if (communication.IsPCBAlive == false)
+            Container(
+              color:
+                  Colors.black.withOpacity(0.5), // Semi-transparent background
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(20), // Padding inside the box
+                  decoration: BoxDecoration(
+                    color: Colors.white, // White background
+                    borderRadius: BorderRadius.circular(12), // Rounded corners
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min, // Minimum space taken
+                    crossAxisAlignment:
+                        CrossAxisAlignment.center, // Center content
+                    children: [
+                      Icon(
+                        Icons.cancel,
+                        color: Colors.red,
+                        size: 50, // Icon size
+                      ),
+                      const SizedBox(height: 16), // Space between icon and text
+                      SizedBox(
+                        width: 375, // Forces text to take full width
+                        child: Text(
+                          'Port Disconnected!', // If no tokens were dispensed
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ],
                   ),
