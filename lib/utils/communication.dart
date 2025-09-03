@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:tbcc/utils/HelperFunction/commonUtility.dart';
 import 'package:usb_serial/usb_serial.dart';
 
 import '../main.dart';
@@ -86,16 +87,19 @@ class Communication {
   List<String> _logsGetStatus = [];
   String AlllogsGetStatus = "";
 
+  DateTime currentDateTime = DateTime.now();
   //init
+
   Communication(UsbDevice? testPort) {
     try {
       findAndOpenDevice(testPort);
 
-      print('isconnected $isConnected');
+       LogStorage.logMessage('Start Communication isconnected >>> $isConnected');
 
       Future.delayed(Duration(seconds: 3), () {
         setupCommunication();
-        print('isconnected2 $isConnected');
+
+        LogStorage.logMessage('Start Communication isconnected Test 2 >>> $isConnected');
       });
 
       Future.delayed(Duration(seconds: 5), () {
@@ -113,8 +117,20 @@ class Communication {
         UsbPort.STOPBITS_1,
         UsbPort.PARITY_NONE,
       );
-      print('Serial communication configured!');
+
+      LogStorage.logMessage('Serial communication configured!');
+
     }
+  }
+
+  final _rand = Random();
+
+  int generateRandomByte() {
+    int value;
+    do {
+      value = _rand.nextInt(256); // 0–255
+    } while (value == 0xAA || value == 0xDD);
+    return value;
   }
 
   final _rand = Random();
@@ -131,7 +147,8 @@ class Communication {
     try {
       // List all devices connected via USB
       List<UsbDevice> devices = await UsbSerial.listDevices();
-      print('Devices : $devices');
+      LogStorage.logMessage('Devices >>> $devices');
+
       // Find the device by its Vendor ID and Product ID
       if (init == null) {
         _device =
@@ -141,15 +158,18 @@ class Communication {
 
           // device.vid == 0x1A86 && device.pid == 0x7523, // Vendor ID: 1a86, Product ID: 7523
           orElse: () => throw Exception("USB Serial device not found!"),
+
         );
       } else {
         _device = init;
       }
 
       if (_device == null) {
+        LogStorage.logMessage('No device initialized!');
         return false;
       }
     } catch (e) {
+      LogStorage.logMessage('Error - $e');
       throw Exception(e);
     }
 
@@ -214,17 +234,19 @@ class Communication {
         bool opened = await _port!.open();
         if (opened) {
           isConnected = true;
-          print('Device opened successfully!');
+          LogStorage.logMessage('Device opened successfully!');
+
           return true;
         } else {
-          print('Failed to open the device.');
+          LogStorage.logMessage('Failed to open the device.');
           return false;
         }
       } else {
-        print('Device not found');
+        LogStorage.logMessage('Device not found.');
         return false;
       }
     } catch (e) {
+      LogStorage.logMessage('Error - $e');
       throw Exception(e);
     }
   }
@@ -295,8 +317,7 @@ class Communication {
     while (_buffer.isNotEmpty) {
       // Ensure start byte is correct
       while (_buffer.isNotEmpty && _buffer[0] != 0xAA) {
-        print(
-            '❌ Invalid start byte: ${_buffer[0].toRadixString(16)}. Discarding...');
+        LogStorage.logMessage('❌ Invalid start byte: ${_buffer[0].toRadixString(16)}. Discarding...');
         _buffer.removeAt(0);
         await Future.delayed(
             Duration(milliseconds: 10)); // Allow async processing
@@ -313,7 +334,7 @@ class Communication {
       if (_buffer.length >= expectedLength) {
         // We received enough bytes, check the end byte
         if (_buffer[expectedLength - 1] != 0xDD) {
-          print('❌ Error: Invalid end byte, discarding entire buffer.');
+          LogStorage.logMessage('❌ Error: Invalid end byte, discarding entire buffer.');
           _buffer.clear();
           return;
         }
@@ -331,8 +352,9 @@ class Communication {
         _buffer.clear();
       } else if (_buffer.contains(0xDD)) {
         // ❌ If `0xDD` is found early and length is invalid, clear buffer
-        print(
-            '❌ Error: Found end byte `0xDD` but length is invalid. Clearing buffer.');
+
+        LogStorage.logMessage('${currentDateTime}:❌ Error: Found end byte `0xDD` but length is invalid. Clearing buffer.');
+
         _buffer.clear();
         return;
       } else {
@@ -556,6 +578,7 @@ class Communication {
 
     data = message;
     //Polling
+    LogStorage.logMessage('Data >>> ${data}');
 
     if (_listEquals(data, aftersoldout)) {
       await _port!.write(aftersoldoutres);
@@ -642,8 +665,7 @@ class Communication {
       }
       // Send the reply message
       _port!.write(statusResponse);
-      print(
-          'OUT >>>: ${statusResponse.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      LogStorage.logMessage('Android OUT >>>: ${statusResponse.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
     }
     //status2
     //status1
@@ -652,8 +674,7 @@ class Communication {
 
       // Send the reply message
       _port!.write(statusResponse);
-      print(
-          'OUT >>>: ${statusResponse.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      LogStorage.logMessage('Android OUT >>>: ${statusResponse.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
     }
 
     //Request qr
@@ -727,6 +748,7 @@ class Communication {
           data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
 
       if (isQr == false) {
+        LogStorage.logMessage('isQR = $isQr');
         myHomePageKey.currentState?.InsertCash('Failed', 0, 0, 0, 0);
       }
       // Send the reply message
@@ -763,15 +785,17 @@ class Communication {
         int RemainingtoDispense = data[11] | (data[12] << 8); // 12th-13th byte
 
         // Print decoded values
-        print("Cash Value: $cashValue");
-        print("Total Needed to Dispense: $totalNeeded");
-        print("Remaining to Dispense: $RemainingtoDispense");
+
+        LogStorage.logMessage('Cash Value: $cashValue');
+        LogStorage.logMessage('Total Needed to Dispense: $totalNeeded');
+        LogStorage.logMessage('Remaining to Dispense: $RemainingtoDispense');
+
 
         RemainingtoDispenseG = RemainingtoDispense;
         // Send the reply message
         _port!.write(dispensing);
-        print(
-            'OUT >>>: ${dispensing.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
+        LogStorage.logMessage('Android OUT >>>: ${dispensing.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
         // if(RemainingtoDispense == 0 && cashValue == 0)
         //   {
         //     isCompleteDispense = true;
@@ -789,12 +813,13 @@ class Communication {
           myHomePageKey.currentState?.InsertCash('Dispensing', 0, 0, 0, 0);
           isDispenseCash = true;
           cashValue_ = cashValue;
-          print('cash dispensing true');
+          LogStorage.logMessage('cash dispensing true');
         }
 
         myHomePageKey.currentState?.remainingToDispense(RemainingtoDispense);
+        LogStorage.logMessage('Remaining to Dispense >>> $RemainingtoDispense');
       } else {
-        print("Invalid response length.");
+        LogStorage.logMessage('Invalid response length.');
       }
 
       print("");
@@ -825,8 +850,8 @@ class Communication {
           (data[19] << 24); // Correct byte order for little-endian
 
       // Print decoded values
-      print("Qr Dispense Counter: $QRDispenseCounter");
-      print("UTD qr Dispense Counter: $UTDQRDispenseCounter");
+      LogStorage.logMessage('Qr Dispense Counter >>> $QRDispenseCounter');
+      LogStorage.logMessage('UTD QR Dispense Counter >>> $UTDQRDispenseCounter');
 
       // Send the reply message
       _port!.write(qrteldis);
@@ -840,6 +865,7 @@ class Communication {
       QrDispenseCounterTel = QRDispenseCounter;
 
       if (QRDispenseCounter > 0) {
+        LogStorage.logMessage('QRDispenseCounter >>> ${QRDispenseCounter}');
         isCompleteDispense = true;
       }
 
@@ -859,7 +885,10 @@ class Communication {
           .map((byte) =>
               '0x${byte.toRadixString(16).padLeft(2, '0').toUpperCase()}')
           .join(' ');
-      print("Dispensed, Cash UTD here.");
+
+      LogStorage.logMessage('Stage >>> Dispensed, Cash UTD here.');
+      LogStorage.logMessage('Data Length >>> ${data.length})');
+
       isDispenseCash = true;
       isDispensing = false;
       // Check if the response length is correct
@@ -883,15 +912,15 @@ class Communication {
             (data[25] << 24); // 10th-11th byte
 
         // Print decoded values
-        print("Cash Dispense Counter: $CASHDispenseCounter");
-        print("UTD Cash Dispense Counter: $UTDCASHDispenseCounter");
-        print("Cash Counter: $CASHCounter");
-        print("UTD Cash Counter: $UTDCASHCounter");
+        LogStorage.logMessage('Cash Dispense Counter >>> $CASHDispenseCounter');
+        LogStorage.logMessage('UTD Cash Dispense Counter >>> $UTDCASHDispenseCounter');
+        LogStorage.logMessage('Cash Counter >>> $CASHCounter');
+        LogStorage.logMessage('UTD Cash Counter >>> $UTDCASHCounter');
 
         // Send the reply message
         _port!.write(cashteldis);
-        print(
-            'OUT >>>: ${cashteldis.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+        LogStorage.logMessage('Android OUT >>>: ${cashteldis.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ')}');
+
         if (CASHDispenseCounter > 0 && UTDCASHDispenseCounter > 0) {
           myHomePageKey.currentState?.InsertCash(
               'Completed',
@@ -900,14 +929,15 @@ class Communication {
               CASHDispenseCounter,
               UTDCASHCounter);
           isCompleteDispense = true;
+          LogStorage.logMessage('cash dispense complete true');
 
-          print('cash dispense complete true');
           CASHDispenseCounter_ = CASHDispenseCounter;
           CashCounter = CASHCounter;
           UtdCash = UTDCASHDispenseCounter;
         }
       } else {
-        print("Invalid response length.");
+        LogStorage.logMessage('Invalid response length.');
+
       }
     }
     //req res
@@ -925,9 +955,10 @@ class Communication {
         data[9] == sentreqcommand[9] &&
         data[10] == sentreqcommand[10]) {
       if (data[13] == 0x01) {
-        print("Mother board receive signal and dispense");
+
+        LogStorage.logMessage('Mother board receive signal and dispense');
       } else {
-        print("Mother board not able receive signal and dispense");
+        LogStorage.logMessage('Mother board not able receive signal and dispense');
       }
       print("Accepted request receive ");
     } else if (_listEquals(data, pcToPollingPCBresaccept)) {
@@ -947,7 +978,7 @@ class Communication {
   Future<void> listenForResponse() async {
     // SerialPortReader reader = SerialPortReader(port);
     // Stream<Uint8List> responseStream = reader.stream;
-    print('Start Listening...');
+    LogStorage.logMessage('Start Listening');
     // Define the expected request and the response
 
     _port!.inputStream?.listen((Uint8List data) async {
@@ -990,6 +1021,8 @@ class Communication {
         isCompleteDispense = false; // Reset the flag for future operations
         isQr = false;
 
+        LogStorage.logMessage('maxRetries >>> $maxRetries || retries >>> $retries after result return $totalUtdQr');
+
         return Result(success: true, message: '0', utdQr: totalUtdQr);
       }
 
@@ -997,13 +1030,14 @@ class Communication {
         isSoldOut = false;
         isCompleteDispense = false;
         isQr = false;
-
+        LogStorage.logMessage('isSoldOut >>> $isSoldOut');
         return Result(success: false, message: '1', utdQr: 0);
       }
 
       // Wait for the specified interval before retrying
       await Future.delayed(Duration(milliseconds: 2000));
       retries++;
+      LogStorage.logMessage('$retries');
     }
 
     isQr = false;
@@ -1057,7 +1091,8 @@ class Communication {
       cashValueAmount = cashValue;
       await sendData(requestDispense);
     } else {
-      print('Unknown command');
+
+      LogStorage.logMessage('Unknown command');
     }
 
     const int maxRetries = 30; // Maximum retries
@@ -1182,6 +1217,7 @@ class Communication {
 
     // If retries exceed maxRetries, return 'Failed'
     // message: 2 is refund , 3 no refund
+    LogStorage.logMessage('Message = isDispensing >>> $isDispensing [IF isDispensing = 2 mean Refund and 3 mean No Refund]');
     return Result(success: false, message: isDispensing ? '3' : '2', utdQr: 0);
   }
 
@@ -1228,6 +1264,7 @@ class Communication {
     command[11] = scaledAmount & 0xFF; // lower 8 bits
     command[12] = (scaledAmount >> 8) & 0xFF; // upper 8 bits
 
+    LogStorage.logMessage(' Dispense amount >>> $dispenseAmount');
     // Recalculate checksum using XOR from index 1 to index 14 (excluding the checksum byte)
     int checksum = command
         .sublist(
