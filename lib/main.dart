@@ -7,15 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'
-    show
-        FilteringTextInputFormatter,
-        MethodChannel,
-        PlatformException,
-        SystemNavigator,
-        TextInputFormatter,
-        Uint8List,
-        rootBundle;
+import 'package:flutter/services.dart' show FilteringTextInputFormatter, MethodChannel, PlatformException, SystemNavigator, TextInputFormatter, rootBundle;
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -39,8 +31,7 @@ void main() {
   runApp(MyApp());
 }
 
-final GlobalKey<_MyHomePageState> myHomePageKey =
-    GlobalKey<_MyHomePageState>(); // Create the GlobalKey
+final GlobalKey<_MyHomePageState> myHomePageKey = GlobalKey<_MyHomePageState>(); // Create the GlobalKey
 bool isLoading = false; //qr
 bool isGeneralLoading = false;
 bool isLoadingboot = false;
@@ -49,13 +40,10 @@ String port = '';
 
 class IntegerInputFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(
-      TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
     // Allow only digits
     final newText = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    return newValue.copyWith(
-        text: newText,
-        selection: TextSelection.collapsed(offset: newText.length));
+    return newValue.copyWith(text: newText, selection: TextSelection.collapsed(offset: newText.length));
   }
 }
 
@@ -197,8 +185,7 @@ class _MyHomePageState extends State<MyHomePage> {
   String ErrormsgInitConn = '';
   List<UsbDevice> myStringArray = [];
   String _backgroundImagePath = 'assets/images/bg.jpg';
-  UsbDevice?
-      selectedPort; // Declare it inside the method, ensuring it's not null
+  UsbDevice? selectedPort; // Declare it inside the method, ensuring it's not null
   bool isConnected = true;
   String UTDQR = '0';
   String qrCompanyname = '';
@@ -289,8 +276,7 @@ class _MyHomePageState extends State<MyHomePage> {
       getKey();
     });
 
-    _connectivitySubscription =
-        _connectivity.onConnectivityChanged.listen(_updateConnectionStatus);
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen(_updateConnectionStatus);
     // final portName = ''; // 'COM5';
     // const platform = MethodChannel('com.example.serialport');
     // Wrap the code in a try-catch block to handle errors
@@ -313,8 +299,7 @@ class _MyHomePageState extends State<MyHomePage> {
       print(transactions); // Print the result
 
       try {
-        communication =
-            await Communication(null); // Ensure async initialization
+        communication = await Communication(null); // Ensure async initialization
 
         await Future.delayed(Duration(seconds: 3), () {
           if (communication!.isConnected == false) {
@@ -387,10 +372,8 @@ class _MyHomePageState extends State<MyHomePage> {
   void _loadBackgroundSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _selectedImagePath =
-          prefs.getString('background_image') ?? 'assets/images/bg.jpg';
-      _backgroundImagePath =
-          prefs.getString('background_image') ?? 'assets/images/bg.jpg';
+      _selectedImagePath = prefs.getString('background_image') ?? 'assets/images/bg.jpg';
+      _backgroundImagePath = prefs.getString('background_image') ?? 'assets/images/bg.jpg';
       _currentScale = prefs.getDouble('background_scale') ?? 1.0;
       _backgroundOffsetY = prefs.getDouble('background_offset_y') ?? 0.0;
     });
@@ -423,8 +406,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _getMacAddress() async {
     final info = NetworkInfo();
-    String? mac = await info
-        .getWifiBSSID(); // Gets the BSSID (MAC of the connected router)
+    String? mac = await info.getWifiBSSID(); // Gets the BSSID (MAC of the connected router)
     print('Mac Address : $mac');
     setState(() {
       _macAddress = mac ?? "Unknown";
@@ -491,13 +473,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void _setDefaultCoinPriceListBonus() {
     setState(() {
       coinPriceListBonus = [
-        {
-          'coins': 200,
-          'price': 200,
-          'bonus': 0,
-          'promoTitle': "🔥 Promotion! 🔥",
-          'promoText': "Pay at the counter only!"
-        },
+        {'coins': 200, 'price': 200, 'bonus': 0, 'promoTitle': "🔥 Promotion! 🔥", 'promoText': "Pay at the counter only!"},
       ];
     });
   }
@@ -506,14 +482,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void _setDefaultCoinPriceListNonQr() {
     setState(() {
       coinPriceListNonQr = [
-        {
-          'coins': 200,
-          'price': 200,
-          'bonus': 0,
-          'desc': "FREE CARTON PEPSI",
-          'cashPromoTitle': "🔥 Promotion! 🔥",
-          'cashPromoText': "Pay at the counter only!"
-        },
+        {'coins': 200, 'price': 200, 'bonus': 0, 'desc': "FREE CARTON PEPSI", 'cashPromoTitle': "🔥 Promotion! 🔥", 'cashPromoText': "Pay at the counter only!"},
       ];
     });
   }
@@ -546,17 +515,11 @@ class _MyHomePageState extends State<MyHomePage> {
     String? bonusColorString = prefs.getString('BonusColor');
     String? cashColorString = prefs.getString('CashColor');
 
-    Color regularColorz = regularColorString != null
-        ? Color(int.parse(regularColorString, radix: 16))
-        : const Color(0xFFFEE902); // Default if null
+    Color regularColorz = regularColorString != null ? Color(int.parse(regularColorString, radix: 16)) : const Color(0xFFFEE902); // Default if null
 
-    Color bonusColorz = bonusColorString != null
-        ? Color(int.parse(bonusColorString, radix: 16))
-        : const Color(0xFFD32F2F); // Default if null
+    Color bonusColorz = bonusColorString != null ? Color(int.parse(bonusColorString, radix: 16)) : const Color(0xFFD32F2F); // Default if null
 
-    Color cashColorz = cashColorString != null
-        ? Color(int.parse(cashColorString, radix: 16))
-        : const Color(0xFF4CAF50); // Default if null
+    Color cashColorz = cashColorString != null ? Color(int.parse(cashColorString, radix: 16)) : const Color(0xFF4CAF50); // Default if null
 
     List<dynamic> decodedBonusList = [];
     // Handle device code
@@ -580,12 +543,8 @@ class _MyHomePageState extends State<MyHomePage> {
         setState(() {
           coinPriceList = decodedList.map<Map<String, int>>((item) {
             return {
-              'coins': (item['coins'] is int)
-                  ? item['coins']
-                  : int.tryParse(item['coins'].toString()) ?? 0,
-              'price': (item['price'] is int)
-                  ? item['price']
-                  : int.tryParse(item['price'].toString()) ?? 0,
+              'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
+              'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
             };
           }).toList();
         });
@@ -601,23 +560,14 @@ class _MyHomePageState extends State<MyHomePage> {
       try {
         List<dynamic> decodedBonusList = jsonDecode(savedDataBonus);
         setState(() {
-          coinPriceListBonus =
-              decodedBonusList.map<Map<String, dynamic>>((item) {
+          coinPriceListBonus = decodedBonusList.map<Map<String, dynamic>>((item) {
             final promoTitle = item['promoTitle']?.toString()?.trim();
 
             return {
-              'coins': (item['coins'] is int)
-                  ? item['coins']
-                  : int.tryParse(item['coins'].toString()) ?? 0,
-              'price': (item['price'] is int)
-                  ? item['price']
-                  : int.tryParse(item['price'].toString()) ?? 0,
-              'bonus': (item['bonus'] is int)
-                  ? item['bonus']
-                  : int.tryParse(item['bonus'].toString()) ?? 0,
-              'promoTitle': (promoTitle?.isNotEmpty ?? false)
-                  ? promoTitle
-                  : '🔥 Promotion! 🔥',
+              'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
+              'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
+              'bonus': (item['bonus'] is int) ? item['bonus'] : int.tryParse(item['bonus'].toString()) ?? 0,
+              'promoTitle': (promoTitle?.isNotEmpty ?? false) ? promoTitle : '🔥 Promotion! 🔥',
             };
           }).toList();
         });
@@ -633,28 +583,17 @@ class _MyHomePageState extends State<MyHomePage> {
       try {
         List<dynamic> decodedBonusList = jsonDecode(savedDataNonQr);
         setState(() {
-          coinPriceListNonQr =
-              decodedBonusList.map<Map<String, dynamic>>((item) {
+          coinPriceListNonQr = decodedBonusList.map<Map<String, dynamic>>((item) {
             final cashPromoTitle = item['cashPromoTitle']?.toString()?.trim();
             final cashPromoText = item['cashPromoText']?.toString()?.trim();
 
             return {
-              'coins': (item['coins'] is int)
-                  ? item['coins']
-                  : int.tryParse(item['coins'].toString()) ?? 0,
-              'price': (item['price'] is int)
-                  ? item['price']
-                  : int.tryParse(item['price'].toString()) ?? 0,
-              'bonus': (item['bonus'] is int)
-                  ? item['bonus']
-                  : int.tryParse(item['bonus'].toString()) ?? 0,
+              'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
+              'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
+              'bonus': (item['bonus'] is int) ? item['bonus'] : int.tryParse(item['bonus'].toString()) ?? 0,
               'desc': item['desc']?.toString() ?? '',
-              'cashPromoTitle': (cashPromoTitle?.isNotEmpty ?? false)
-                  ? cashPromoTitle
-                  : '🔥 Promotion! 🔥',
-              'cashPromoText': (cashPromoText?.isNotEmpty ?? false)
-                  ? cashPromoText
-                  : 'Pay at the counter only!',
+              'cashPromoTitle': (cashPromoTitle?.isNotEmpty ?? false) ? cashPromoTitle : '🔥 Promotion! 🔥',
+              'cashPromoText': (cashPromoText?.isNotEmpty ?? false) ? cashPromoText : 'Pay at the counter only!',
             };
           }).toList();
         });
@@ -668,8 +607,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     // Load or Set Default Text
     if (savedText == null || savedText.isEmpty) {
-      savedText =
-          '1. Once the coins are dispensed, no refund request will be accepted.\n'
+      savedText = '1. Once the coins are dispensed, no refund request will be accepted.\n'
           '2. Any question feel free to contact: 0173990160.';
       await prefs.setString('savedText', savedText);
     }
@@ -723,8 +661,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     toggleLoadingDialog(context, true);
     try {
-      final response = await http.get(Uri.parse(
-          "https://www.transpire.com.my/apk/halolopark/version.json"));
+      final response = await http.get(Uri.parse("https://www.transpire.com.my/apk/halolopark/version.json"));
 
       if (response.statusCode == 200) {
         toggleLoadingDialog(context, false);
@@ -741,16 +678,12 @@ class _MyHomePageState extends State<MyHomePage> {
         if (latestVersion != currentVersion) {
           showDialog(
             context: context,
-            barrierDismissible:
-                false, // Prevents closing the dialog when clicking outside
+            barrierDismissible: false, // Prevents closing the dialog when clicking outside
             builder: (context) => AlertDialog(
               title: Text("Update Available"),
-              content: Text(
-                  "A new version ($latestVersion) is available. Update now?"),
+              content: Text("A new version ($latestVersion) is available. Update now?"),
               actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text("Later")),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text("Later")),
                 TextButton(
                     onPressed: () {
                       Navigator.pop(context);
@@ -765,15 +698,12 @@ class _MyHomePageState extends State<MyHomePage> {
         } else {
           showDialog(
             context: context,
-            barrierDismissible:
-                false, // Prevents closing the dialog when clicking outside
+            barrierDismissible: false, // Prevents closing the dialog when clicking outside
             builder: (context) => AlertDialog(
               title: Text("App is updated to latest version"),
               content: Text("No update required."),
               actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text("Okay")),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text("Okay")),
               ],
             ),
           ).then((_) => setState(() {
@@ -787,14 +717,12 @@ class _MyHomePageState extends State<MyHomePage> {
         });
         showDialog(
           context: context,
-          barrierDismissible:
-              false, // Prevents closing the dialog when clicking outside
+          barrierDismissible: false, // Prevents closing the dialog when clicking outside
           builder: (context) => AlertDialog(
             title: Text("Error checking update"),
             content: Text("500."),
             actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context), child: Text("Okay")),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text("Okay")),
             ],
           ),
         ).then((_) => setState(() {
@@ -808,14 +736,12 @@ class _MyHomePageState extends State<MyHomePage> {
       });
       showDialog(
         context: context,
-        barrierDismissible:
-            false, // Prevents closing the dialog when clicking outside
+        barrierDismissible: false, // Prevents closing the dialog when clicking outside
         builder: (context) => AlertDialog(
           title: Text("Error 404"),
           content: Text("Check your internet connection."),
           actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context), child: Text("Okay")),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text("Okay")),
           ],
         ),
       ).then((_) => setState(() {
@@ -906,8 +832,7 @@ class _MyHomePageState extends State<MyHomePage> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text("Download Failed: $e"), backgroundColor: Colors.red),
+        SnackBar(content: Text("Download Failed: $e"), backgroundColor: Colors.red),
       );
     } finally {
       setState(() {
@@ -955,43 +880,25 @@ class _MyHomePageState extends State<MyHomePage> {
     // Convert all values to int explicitly
     List<Map<String, dynamic>> cleanedCoinPriceList = coinPriceList.map((item) {
       return {
-        'coins': (item['coins'] is int)
-            ? item['coins']
-            : int.tryParse(item['coins'].toString()) ?? 0,
-        'price': (item['price'] is int)
-            ? item['price']
-            : int.tryParse(item['price'].toString()) ?? 0,
+        'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
+        'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
       };
     }).toList();
 
-    List<Map<String, dynamic>> cleanedCoinPriceListBonus =
-        coinPriceListBonus.map((item) {
+    List<Map<String, dynamic>> cleanedCoinPriceListBonus = coinPriceListBonus.map((item) {
       return {
-        'coins': (item['coins'] is int)
-            ? item['coins']
-            : int.tryParse(item['coins'].toString()) ?? 0,
-        'price': (item['price'] is int)
-            ? item['price']
-            : int.tryParse(item['price'].toString()) ?? 0,
-        'bonus': (item['bonus'] is int)
-            ? item['bonus']
-            : int.tryParse(item['bonus'].toString()) ?? 0,
+        'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
+        'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
+        'bonus': (item['bonus'] is int) ? item['bonus'] : int.tryParse(item['bonus'].toString()) ?? 0,
         'promoTitle': item['promoTitle'],
       };
     }).toList();
 
-    List<Map<String, dynamic>> cleanedCoinPriceListNonQr =
-        coinPriceListNonQr.map((item) {
+    List<Map<String, dynamic>> cleanedCoinPriceListNonQr = coinPriceListNonQr.map((item) {
       return {
-        'coins': (item['coins'] is int)
-            ? item['coins']
-            : int.tryParse(item['coins'].toString()) ?? 0,
-        'price': (item['price'] is int)
-            ? item['price']
-            : int.tryParse(item['price'].toString()) ?? 0,
-        'bonus': (item['bonus'] is int)
-            ? item['bonus']
-            : int.tryParse(item['bonus'].toString()) ?? 0,
+        'coins': (item['coins'] is int) ? item['coins'] : int.tryParse(item['coins'].toString()) ?? 0,
+        'price': (item['price'] is int) ? item['price'] : int.tryParse(item['price'].toString()) ?? 0,
+        'bonus': (item['bonus'] is int) ? item['bonus'] : int.tryParse(item['bonus'].toString()) ?? 0,
         'desc': item['desc'],
         'cashPromoTitle': item['cashPromoTitle'],
         'cashPromoText': item['cashPromoText']
@@ -1000,10 +907,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
     // Save as JSON string
     prefs.setString('coinPriceList', jsonEncode(cleanedCoinPriceList));
-    prefs.setString(
-        'coinPriceListBonus', jsonEncode(cleanedCoinPriceListBonus));
-    prefs.setString(
-        'coinPriceListNonQr', jsonEncode(cleanedCoinPriceListNonQr));
+    prefs.setString('coinPriceListBonus', jsonEncode(cleanedCoinPriceListBonus));
+    prefs.setString('coinPriceListNonQr', jsonEncode(cleanedCoinPriceListNonQr));
   }
 
   Future<void> initConnectivity() async {
@@ -1066,16 +971,14 @@ class _MyHomePageState extends State<MyHomePage> {
       // Map<String, dynamic> parsedJson2 = jsonDecode(sanitizedResponse);
 
       // ✅ Fix unescaped newlines before decoding
-      String sanitizedResponse =
-          responsekey.body.replaceAll("\r", "").replaceAll("\n", "\\n");
+      String sanitizedResponse = responsekey.body.replaceAll("\r", "").replaceAll("\n", "\\n");
 
 // ✅ Decode the cleaned JSON
       Map<String, dynamic> parsedJson2 = jsonDecode(sanitizedResponse);
       // Map<String, dynamic> parsedJson2 =
       // jsonDecode(responsekey.body);
 
-      String pkey =
-          parsedJson2['data'][0]['privatekey'].replaceAll("\\n", "\n");
+      String pkey = parsedJson2['data'][0]['privatekey'].replaceAll("\\n", "\n");
 
       setState(() {
         key = pkey;
@@ -1088,17 +991,13 @@ class _MyHomePageState extends State<MyHomePage> {
 
     // Check if connected to Wi-Fi or mobile
     for (var connectivity in result) {
-      if (connectivity == ConnectivityResult.mobile ||
-          connectivity == ConnectivityResult.wifi ||
-          connectivity == ConnectivityResult.ethernet) {
+      if (connectivity == ConnectivityResult.mobile || connectivity == ConnectivityResult.wifi || connectivity == ConnectivityResult.ethernet) {
         // Added Ethernet check
         // Perform an internet check (e.g., ping Google)
         try {
-          final response = await InternetAddress.lookup('8.8.8.8')
-              .timeout(Duration(seconds: 5));
+          final response = await InternetAddress.lookup('8.8.8.8').timeout(Duration(seconds: 5));
 
-          hasInternet =
-              response.isNotEmpty && response[0].rawAddress.isNotEmpty;
+          hasInternet = response.isNotEmpty && response[0].rawAddress.isNotEmpty;
         } catch (e) {
           hasInternet = false;
         }
@@ -1177,8 +1076,7 @@ class _MyHomePageState extends State<MyHomePage> {
     try {
       final rawData = await rootBundle.loadString('assets/private_key.txt');
       // Normalize and clean the data
-      final sanitizedData =
-          utf8.decode(rawData.codeUnits).replaceAll('\r\n', '\n').trim();
+      final sanitizedData = utf8.decode(rawData.codeUnits).replaceAll('\r\n', '\n').trim();
       return sanitizedData;
     } catch (e) {
       throw Exception("Error loading private key: $e");
@@ -1188,8 +1086,7 @@ class _MyHomePageState extends State<MyHomePage> {
   String extractCompanyName(String qrData) {
     Map<String, String> parsedData = parseTLV(qrData);
 
-    String companyName =
-        parsedData['59'] ?? 'Unknown'; // Tag 59 contains the company name
+    String companyName = parsedData['59'] ?? 'Unknown'; // Tag 59 contains the company name
     return companyName;
   }
 
@@ -1297,11 +1194,7 @@ class _MyHomePageState extends State<MyHomePage> {
       // print('request token success');
       final responseSetDeviceError = http.post(
         Uri.parse(apiUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Token': token,
-          'Signature': signature
-        },
+        headers: {'Content-Type': 'application/json', 'Token': token, 'Signature': signature},
         body: json.encode(setDeviceError),
       );
       print('error sent, success');
@@ -1325,19 +1218,14 @@ class _MyHomePageState extends State<MyHomePage> {
     String latestIVString = prefs.getString('IVString') ?? '0192006944061854';
 
     // Initialize controllers with updated values
-    TextEditingController machineIdController =
-        TextEditingController(text: latestMachineId);
-    TextEditingController deviceCodeController =
-        TextEditingController(text: latestDeviceCode);
-    TextEditingController secretKeyController =
-        TextEditingController(text: latestSecretKey);
-    TextEditingController ivStringController =
-        TextEditingController(text: latestIVString);
+    TextEditingController machineIdController = TextEditingController(text: latestMachineId);
+    TextEditingController deviceCodeController = TextEditingController(text: latestDeviceCode);
+    TextEditingController secretKeyController = TextEditingController(text: latestSecretKey);
+    TextEditingController ivStringController = TextEditingController(text: latestIVString);
 
     showDialog(
       context: context,
-      barrierDismissible:
-          false, // Prevents closing the dialog when clicking outside
+      barrierDismissible: false, // Prevents closing the dialog when clicking outside
       builder: (context) {
         return AlertDialog(
           title: Text('Device Configuration'),
@@ -1422,15 +1310,12 @@ class _MyHomePageState extends State<MyHomePage> {
   // Show modal with the list of all entries
   void _showListModal(BuildContext context) {
     List<Map<String, dynamic>> tempCoinPriceList = List.from(coinPriceList);
-    List<Map<String, dynamic>> tempCoinPriceListBonus =
-        List.from(coinPriceListBonus);
-    List<Map<String, dynamic>> tempCoinPriceListNonQr =
-        List.from(coinPriceListNonQr);
+    List<Map<String, dynamic>> tempCoinPriceListBonus = List.from(coinPriceListBonus);
+    List<Map<String, dynamic>> tempCoinPriceListNonQr = List.from(coinPriceListNonQr);
 
     showDialog(
       context: context,
-      barrierDismissible:
-          false, // Prevents closing the dialog when clicking outside
+      barrierDismissible: false, // Prevents closing the dialog when clicking outside
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
@@ -1442,18 +1327,12 @@ class _MyHomePageState extends State<MyHomePage> {
                   children: [
                     RichText(
                       text: TextSpan(
-                        style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.black), // Default text style
+                        style: TextStyle(fontSize: 16, color: Colors.black), // Default text style
                         children: [
-                          TextSpan(
-                              text:
-                                  'The maximum number of coins that can be dispensed at once is '),
+                          TextSpan(text: 'The maximum number of coins that can be dispensed at once is '),
                           TextSpan(
                             text: '500',
-                            style: TextStyle(
-                                fontWeight:
-                                    FontWeight.bold), // Bold style for "500"
+                            style: TextStyle(fontWeight: FontWeight.bold), // Bold style for "500"
                           ),
                           TextSpan(text: '.'), // Period after "500"
                         ],
@@ -1461,18 +1340,12 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
                     RichText(
                       text: TextSpan(
-                        style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.black), // Default text style
+                        style: TextStyle(fontSize: 16, color: Colors.black), // Default text style
                         children: [
                           TextSpan(text: 'Status Soldout : '),
                           TextSpan(
-                            text: isLatestSoldout
-                                ? 'yes, Remaining token: $remainingTodispenseAm'
-                                : 'no',
-                            style: TextStyle(
-                                fontWeight:
-                                    FontWeight.bold), // Bold style for "500"
+                            text: isLatestSoldout ? 'yes, Remaining token: $remainingTodispenseAm' : 'no',
+                            style: TextStyle(fontWeight: FontWeight.bold), // Bold style for "500"
                           ),
 
                           TextSpan(text: '.'), // Period after "500"
@@ -1484,8 +1357,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       title: 'Regular',
                       list: tempCoinPriceList,
                       setState: setStateDialog,
-                      onColorChanged: (color) =>
-                          setState(() => regularColor = color),
+                      onColorChanged: (color) => setState(() => regularColor = color),
                       sectionColor: regularColor,
                     ),
                     SizedBox(height: 20),
@@ -1494,8 +1366,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       list: tempCoinPriceListBonus,
                       setState: setStateDialog,
                       isBonus: true,
-                      onColorChanged: (color) =>
-                          setState(() => bonusColor = color),
+                      onColorChanged: (color) => setState(() => bonusColor = color),
                       sectionColor: bonusColor,
                     ),
                     SizedBox(height: 20),
@@ -1505,8 +1376,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       setState: setStateDialog,
                       isCash: true,
                       isBonus: true,
-                      onColorChanged: (color) =>
-                          setState(() => cashColor = color),
+                      onColorChanged: (color) => setState(() => cashColor = color),
                       sectionColor: cashColor,
                     ),
                   ],
@@ -1659,25 +1529,16 @@ class _MyHomePageState extends State<MyHomePage> {
             mainAxisSize: MainAxisSize.min,
             children: List.generate(list.length, (index) {
               if (coinsControllers.length <= index) {
-                coinsControllers.add(TextEditingController(
-                    text: list[index]['coins'].toString()));
-                priceControllers.add(TextEditingController(
-                    text: list[index]['price'].toString()));
-                bonusControllers.add(isBonus
-                    ? TextEditingController(
-                        text: list[index]['bonus'].toString())
-                    : null);
-                desControllers.add(TextEditingController(
-                    text: list[index]['desc'].toString()));
+                coinsControllers.add(TextEditingController(text: list[index]['coins'].toString()));
+                priceControllers.add(TextEditingController(text: list[index]['price'].toString()));
+                bonusControllers.add(isBonus ? TextEditingController(text: list[index]['bonus'].toString()) : null);
+                desControllers.add(TextEditingController(text: list[index]['desc'].toString()));
 
-                promoTitleControllers.add(TextEditingController(
-                    text: list[index]['promoTitle'].toString()));
+                promoTitleControllers.add(TextEditingController(text: list[index]['promoTitle'].toString()));
 
-                cashPromoTitleControllers.add(TextEditingController(
-                    text: list[index]['cashPromoTitle'].toString()));
+                cashPromoTitleControllers.add(TextEditingController(text: list[index]['cashPromoTitle'].toString()));
 
-                cashPromoTextControllers.add(TextEditingController(
-                    text: list[index]['cashPromoText'].toString()));
+                cashPromoTextControllers.add(TextEditingController(text: list[index]['cashPromoText'].toString()));
 
                 coinsFocusNodes.add(FocusNode());
                 priceFocusNodes.add(FocusNode());
@@ -1700,17 +1561,14 @@ class _MyHomePageState extends State<MyHomePage> {
                             controller: coinsControllers[index],
                             focusNode: coinsFocusNodes[index],
                             keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly
-                            ],
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                             decoration: InputDecoration(labelText: 'Coins'),
                             onChanged: (value) {
                               int parsedValue = int.tryParse(value) ?? 0;
                               list[index]['coins'] = parsedValue;
                             },
                             onEditingComplete: () {
-                              FocusScope.of(context)
-                                  .requestFocus(priceFocusNodes[index]);
+                              FocusScope.of(context).requestFocus(priceFocusNodes[index]);
                             },
                           ),
                         ),
@@ -1721,18 +1579,14 @@ class _MyHomePageState extends State<MyHomePage> {
                             controller: priceControllers[index],
                             focusNode: priceFocusNodes[index],
                             keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly
-                            ],
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                             decoration: InputDecoration(labelText: 'Price'),
                             onChanged: (value) {
                               int parsedValue = int.tryParse(value) ?? 0;
                               list[index]['price'] = parsedValue;
                             },
                             onEditingComplete: () {
-                              FocusScope.of(context).requestFocus(
-                                  bonusFocusNodes[index] ??
-                                      coinsFocusNodes[index]);
+                              FocusScope.of(context).requestFocus(bonusFocusNodes[index] ?? coinsFocusNodes[index]);
                             },
                           ),
                         ),
@@ -1767,17 +1621,14 @@ class _MyHomePageState extends State<MyHomePage> {
                         controller: bonusControllers[index],
                         focusNode: bonusFocusNodes[index],
                         keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly
-                        ],
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                         decoration: InputDecoration(labelText: 'Bonus'),
                         onChanged: (value) {
                           int parsedValue = int.tryParse(value) ?? 0;
                           list[index]['bonus'] = parsedValue;
                         },
                         onEditingComplete: () {
-                          FocusScope.of(context)
-                              .requestFocus(bonusFocusNodes[index]);
+                          FocusScope.of(context).requestFocus(bonusFocusNodes[index]);
                         },
                       )
                     ],
@@ -1893,14 +1744,12 @@ class _MyHomePageState extends State<MyHomePage> {
         print('recently soldout detected');
         if (isLatestQR) {
           if (transactions.isNotEmpty) {
-            Map<String, dynamic> firstTransaction =
-                transactions[0]; // Get the first item
+            Map<String, dynamic> firstTransaction = transactions[0]; // Get the first item
             final frefid = firstTransaction['trxid'];
             final famount = firstTransaction['amount'];
             final futdqr = firstTransaction['utdqr'];
 
-            final encryptedKey =
-                encryptPlainText(deviceCode, secretKey, ivString);
+            final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
 
             final payloadtoken = {
               "commandcode": "RequestToken",
@@ -1954,38 +1803,29 @@ class _MyHomePageState extends State<MyHomePage> {
                   ]
                 };
                 // If isCompleteDispense becomes true, return 'Completed'
-                communication.isCompleteDispense =
-                    false; // Reset the flag for future operations
-                communication.isSoldOut =
-                    false; // Reset the flag for future operations
+                communication.isCompleteDispense = false; // Reset the flag for future operations
+                communication.isSoldOut = false; // Reset the flag for future operations
                 communication.isDispenseCash = false;
                 communication.isQr = false;
 
                 // fetch success api
                 if (responsetoken.statusCode == 200) {
-                  Map<String, dynamic> parsedJson =
-                      jsonDecode(responsetoken.body);
+                  Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
                   String token = parsedJson['data'][0]['token'];
 
                   final privateKeyPem = await loadPrivateKey();
-                  String signature = await generateSignature(
-                      jsonEncode(SuccessPaymentPayloadtrx), key);
+                  String signature = await generateSignature(jsonEncode(SuccessPaymentPayloadtrx), key);
 
                   final responseSuccessTRXEW = await http.post(
                     Uri.parse(apiUrl),
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Token': token,
-                      'Signature': signature
-                    },
+                    headers: {'Content-Type': 'application/json', 'Token': token, 'Signature': signature},
                     body: json.encode(SuccessPaymentPayloadtrx),
                   );
 
                   if (responseSuccessTRXEW.statusCode == 200) {
                     print('Transaction:Success sent successfully');
                   } else {
-                    print(
-                        'Failed to success transaction. Status code: ${responseSuccessTRXEW.statusCode}');
+                    print('Failed to success transaction. Status code: ${responseSuccessTRXEW.statusCode}');
                   }
 
                   await clearFailedTrx();
@@ -2014,10 +1854,8 @@ class _MyHomePageState extends State<MyHomePage> {
             await prefs.remove('isLatestSoldout');
             await prefs.remove('isLatestQR');
 
-            communication.isCompleteDispense =
-                false; // Reset the flag for future operations
-            communication.isSoldOut =
-                false; // Reset the flag for future operations
+            communication.isCompleteDispense = false; // Reset the flag for future operations
+            communication.isSoldOut = false; // Reset the flag for future operations
             communication.isDispenseCash = false;
             communication.isQr = false;
 
@@ -2041,8 +1879,7 @@ class _MyHomePageState extends State<MyHomePage> {
             // Retry until isCompleteDispense becomes true or retries exceed maxRetries
             while (retries < maxRetries) {
               if (communication.isCompleteDispense) {
-                final encryptedKey =
-                    encryptPlainText(deviceCode, secretKey, ivString);
+                final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
 
                 final payloadtoken = {
                   "commandcode": "RequestToken",
@@ -2061,10 +1898,8 @@ class _MyHomePageState extends State<MyHomePage> {
                   body: json.encode(payloadtoken),
                 );
 
-                communication.isSoldOut =
-                    false; // Reset the flag for future operations
-                communication.isCompleteDispense =
-                    false; // Reset the flag for future operations
+                communication.isSoldOut = false; // Reset the flag for future operations
+                communication.isCompleteDispense = false; // Reset the flag for future operations
                 communication.isDispenseCash = false;
                 communication.isQr = false;
 
@@ -2080,9 +1915,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       "coinTubeCounter": "0.00",
                       "utdCoinBox": "0.00",
                       "coinBoxCounter": "0.00",
-                      "amount": latestCashValue == 0
-                          ? communication.CASHDispenseCounter_.toString()
-                          : (latestCashValue / 100).toString(),
+                      "amount": latestCashValue == 0 ? communication.CASHDispenseCounter_.toString() : (latestCashValue / 100).toString(),
                       "slot": "5",
                       "rssi": "-99"
                     }
@@ -2090,23 +1923,17 @@ class _MyHomePageState extends State<MyHomePage> {
                 };
 
                 final privateKeyPem = await loadPrivateKey();
-                String signature =
-                    await generateSignature(jsonEncode(setcashpayload), key);
+                String signature = await generateSignature(jsonEncode(setcashpayload), key);
 
                 if (responsetoken.statusCode == 200) {
                   final responseData = json.decode(responsetoken.body);
-                  Map<String, dynamic> parsedJson =
-                      jsonDecode(responsetoken.body);
+                  Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
                   String token = parsedJson['data'][0]['token'];
 
                   print('request token success');
                   final responseSetCashTrx = http.post(
                     Uri.parse(apiUrl),
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Token': token,
-                      'Signature': signature
-                    },
+                    headers: {'Content-Type': 'application/json', 'Token': token, 'Signature': signature},
                     body: json.encode(setcashpayload),
                   );
                 }
@@ -2138,10 +1965,8 @@ class _MyHomePageState extends State<MyHomePage> {
             await prefs.remove('isLatestSoldout');
             await prefs.remove('isLatestQR');
 
-            communication.isCompleteDispense =
-                false; // Reset the flag for future operations
-            communication.isSoldOut =
-                false; // Reset the flag for future operations
+            communication.isCompleteDispense = false; // Reset the flag for future operations
+            communication.isSoldOut = false; // Reset the flag for future operations
             communication.isDispenseCash = false;
             communication.isQr = false;
 
@@ -2172,8 +1997,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  void InsertCash(String status, int UtdCash, int CashCounter, int cashValue_,
-      int UTDCASHCounter) async {
+  void InsertCash(String status, int UtdCash, int CashCounter, int cashValue_, int UTDCASHCounter) async {
     print('insertcash being called');
     if (status == 'Dispensing') {
       setState(() {
@@ -2226,8 +2050,7 @@ class _MyHomePageState extends State<MyHomePage> {
       };
 
       final privateKeyPem = await loadPrivateKey();
-      String signature =
-          await generateSignature(jsonEncode(setcashpayload), key);
+      String signature = await generateSignature(jsonEncode(setcashpayload), key);
 
       if (responsetoken.statusCode == 200) {
         final responseData = json.decode(responsetoken.body);
@@ -2237,11 +2060,7 @@ class _MyHomePageState extends State<MyHomePage> {
         print('request token success');
         final responseSetCashTrx = http.post(
           Uri.parse(apiUrl),
-          headers: {
-            'Content-Type': 'application/json',
-            'Token': token,
-            'Signature': signature
-          },
+          headers: {'Content-Type': 'application/json', 'Token': token, 'Signature': signature},
           body: json.encode(setcashpayload),
         );
       }
@@ -2260,8 +2079,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     if (status == 'Failed') {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(
-          'latestCashValue', communication.cashValue_); // Store cash value
+      await prefs.setInt('latestCashValue', communication.cashValue_); // Store cash value
 
       Devicefaulty();
       saveSoldout(false);
@@ -2275,11 +2093,11 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   //Completing progress
+  // Core of Code for the program to run !!!!!! START
   void closingStatement() async {
     int? amounttodis = 0;
     // Convert selectedAmount to an integer
-    int? amount =
-        int.tryParse(selectedAmount.split('.')[0]); // Extract integer part
+    int? amount = int.tryParse(selectedAmount.split('.')[0]); // Extract integer part
 
     // Search in coinPriceList
     for (var item in coinPriceList) {
@@ -2292,8 +2110,7 @@ class _MyHomePageState extends State<MyHomePage> {
     if (amounttodis == 0) {
       for (var item in coinPriceListBonus) {
         if (item['price'] == amount) {
-          amounttodis =
-              (item['coins']! + (item['bonus'] ?? 0)); // Include bonus coins
+          amounttodis = (item['coins']! + (item['bonus'] ?? 0)); // Include bonus coins
           break;
         }
       }
@@ -2340,24 +2157,18 @@ class _MyHomePageState extends State<MyHomePage> {
       ]
     };
     final privateKeyPem = await loadPrivateKey();
-    String signature =
-        await generateSignature(jsonEncode(PaymentPayloadtrx), key);
+    String signature = await generateSignature(jsonEncode(PaymentPayloadtrx), key);
     try {
       final responsePaymentTRXEW = await http.post(
         Uri.parse(apiUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Token': Token,
-          'Signature': signature
-        },
+        headers: {'Content-Type': 'application/json', 'Token': Token, 'Signature': signature},
         body: json.encode(PaymentPayloadtrx),
       );
 
       if (responsePaymentTRXEW.statusCode == 200) {
         print('Transaction:Payment sent successfully');
       } else {
-        print(
-            'Failed to send payment transaction. Status code: ${responsePaymentTRXEW.statusCode}');
+        print('Failed to send payment transaction. Status code: ${responsePaymentTRXEW.statusCode}');
       }
     } catch (err) {
       print('Error during fetch payment trx: $err');
@@ -2446,24 +2257,18 @@ class _MyHomePageState extends State<MyHomePage> {
       });
 
       // fetch success api
-      String signature =
-          await generateSignature(jsonEncode(SuccessPaymentPayloadtrx), key);
+      String signature = await generateSignature(jsonEncode(SuccessPaymentPayloadtrx), key);
       try {
         final responseSuccessTRXEW = await http.post(
           Uri.parse(apiUrl),
-          headers: {
-            'Content-Type': 'application/json',
-            'Token': Token,
-            'Signature': signature
-          },
+          headers: {'Content-Type': 'application/json', 'Token': Token, 'Signature': signature},
           body: json.encode(SuccessPaymentPayloadtrx),
         );
 
         if (responseSuccessTRXEW.statusCode == 200) {
           print('Transaction:Success sent successfully');
         } else {
-          print(
-              'Failed to success transaction. Status code: ${responseSuccessTRXEW.statusCode}');
+          print('Failed to success transaction. Status code: ${responseSuccessTRXEW.statusCode}');
         }
       } catch (err) {
         print('Error during fetch success trx: $err');
@@ -2490,6 +2295,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     // print('closingstatement being called');
   }
+  // Core of Code for the program to run !!!!!! END
 
 //mqtt
 
@@ -2519,8 +2325,7 @@ class _MyHomePageState extends State<MyHomePage> {
     devices = await UsbSerial.listDevices();
 
     setState(() {
-      myStringArray
-          .addAll(devices.map((device) => device)); // Use addAll directly
+      myStringArray.addAll(devices.map((device) => device)); // Use addAll directly
     });
     try {
       // Ensure the Communication initialization is async and handle errors properly
@@ -2552,10 +2357,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
     overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
-        top: MediaQuery.of(context).size.height *
-            0.15, // Position near the top (15% from the top)
-        left: (MediaQuery.of(context).size.width - 300) /
-            2, // Center horizontally with fixed width
+        top: MediaQuery.of(context).size.height * 0.15, // Position near the top (15% from the top)
+        left: (MediaQuery.of(context).size.width - 300) / 2, // Center horizontally with fixed width
         child: Material(
           color: Colors.transparent,
           child: Container(
@@ -2630,21 +2433,13 @@ class _MyHomePageState extends State<MyHomePage> {
         "commandcode": "DI_SetTransactionInjectCredit",
         "devicecode": deviceCode,
         "data": [
-          {
-            "statusstarttime": getFormattedDateTime(),
-            "utdremotepaycounter": UTDQR,
-            "remotepayamount": injectamt,
-            "transactionid": trxidinject,
-            "responsetime": "1",
-            "rssi": "-50"
-          }
+          {"statusstarttime": getFormattedDateTime(), "utdremotepaycounter": UTDQR, "remotepayamount": injectamt, "transactionid": trxidinject, "responsetime": "1", "rssi": "-50"}
         ]
       };
 
       // final privateKeyPem = await loadPrivateKey();
 
-      String signature =
-          await generateSignature(jsonEncode(injectpayloadresponse), key);
+      String signature = await generateSignature(jsonEncode(injectpayloadresponse), key);
 
       if (responsetoken.statusCode == 200) {
         final responseData = json.decode(responsetoken.body);
@@ -2654,11 +2449,7 @@ class _MyHomePageState extends State<MyHomePage> {
         print('request token success $token');
         final responseSetinjectTrx = await http.post(
           Uri.parse(apiUrl),
-          headers: {
-            'Content-Type': 'application/json',
-            'Token': token,
-            'Signature': signature
-          },
+          headers: {'Content-Type': 'application/json', 'Token': token, 'Signature': signature},
           body: json.encode(injectpayloadresponse),
         );
         print('payload inject $injectpayloadresponse');
@@ -2700,8 +2491,7 @@ class _MyHomePageState extends State<MyHomePage> {
             if (item['commandcode'] == 'SetPing') {
               String trxid = data['transactionid'];
 
-              final encryptedKey =
-                  encryptPlainText(deviceCode, secretKey, ivString);
+              final encryptedKey = encryptPlainText(deviceCode, secretKey, ivString);
 
               final payloadtoken = {
                 "commandcode": "RequestToken",
@@ -2743,8 +2533,7 @@ class _MyHomePageState extends State<MyHomePage> {
               // Handle the response
               if (responsetoken.statusCode == 200) {
                 final responseData = json.decode(responsetoken.body);
-                Map<String, dynamic> parsedJson =
-                    jsonDecode(responsetoken.body);
+                Map<String, dynamic> parsedJson = jsonDecode(responsetoken.body);
                 String token = parsedJson['data'][0]['token'];
                 final responseSetDevice = await http.post(
                   Uri.parse(apiUrl),
@@ -2755,18 +2544,7 @@ class _MyHomePageState extends State<MyHomePage> {
             }
 
             if (item['commandcode'] == 'SetInjectCredit') {
-              const List<int> validAmounts = [
-                100,
-                200,
-                300,
-                400,
-                500,
-                600,
-                700,
-                800,
-                900,
-                1000
-              ];
+              const List<int> validAmounts = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
               print('data inject : $data');
 
               setState(() {
@@ -2827,6 +2605,7 @@ class _MyHomePageState extends State<MyHomePage> {
   // Connect to the port once
 
   Future<bool> sendData(int command, int cashValue) async {
+    // call helper function in commnucation.dart
     Result? result = await communication.main(command, cashValue);
 
     if (result.success == true) {
@@ -2865,25 +2644,11 @@ class _MyHomePageState extends State<MyHomePage> {
 
   // Helper function to get month as a string (e.g., "Jan", "Feb", etc.)
   String _getMonthString(int month) {
-    const months = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec"
-    ];
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     return months[month - 1];
   }
 
-  String encryptPlainText(
-      String deviceCode, String secretKey, String ivString) {
+  String encryptPlainText(String deviceCode, String secretKey, String ivString) {
     secretKey = '$secretKey!@#\$';
 // Get the current UTC time, add 1 minute and format it
     final now = DateTime.now().toUtc().add(Duration(minutes: 1));
@@ -2898,8 +2663,7 @@ class _MyHomePageState extends State<MyHomePage> {
     final iv = encrypt.IV.fromUtf8(ivString); // 16-byte IV for AES
 
     // Configure AES with CBC mode and PKCS7 padding
-    final encrypter = encrypt.Encrypter(
-        encrypt.AES(key, mode: encrypt.AESMode.cbc, padding: 'PKCS7'));
+    final encrypter = encrypt.Encrypter(encrypt.AES(key, mode: encrypt.AESMode.cbc, padding: 'PKCS7'));
 
     // Encrypt the plaintext
     final encrypted = encrypter.encrypt(plainText, iv: iv);
@@ -2908,10 +2672,7 @@ class _MyHomePageState extends State<MyHomePage> {
     return encrypted.base64;
   }
 
-  Future<void> successfulDispense() async {
-    //fetch api successful dispense
-  }
-
+  // Function create failed transaction for refund if 255 (for TB Internal use validation) START
   Future<void> cancelFetchTRX(String errorMsg) async {
     String statustype = "";
     if (errorMsg == "Timeout") {
@@ -2997,16 +2758,11 @@ class _MyHomePageState extends State<MyHomePage> {
         }
       ]
     };
-    String signature =
-        await generateSignature(jsonEncode(payloadcanceltrx), key);
+    String signature = await generateSignature(jsonEncode(payloadcanceltrx), key);
     try {
       final responseTRXEW = await http.post(
         Uri.parse(apiUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Token': Token,
-          'Signature': signature
-        },
+        headers: {'Content-Type': 'application/json', 'Token': Token, 'Signature': signature},
         body: json.encode(payloadcanceltrx),
       );
 
@@ -3014,32 +2770,27 @@ class _MyHomePageState extends State<MyHomePage> {
         // print('Transaction cancelled successfully');
 
         if (errorMsg == 'Timeout') {
-          final responseSetDeviceError = http.post(
+          final responseSetDeviceError = await http.post(
             Uri.parse(apiUrl),
-            headers: {
-              'Content-Type': 'application/json',
-              'Token': Token,
-              'Signature': signature
-            },
+            headers: {'Content-Type': 'application/json', 'Token': Token, 'Signature': signature},
             body: json.encode(setDeviceError),
           );
-
+          communication.ResetLogDispensing();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                  "Refund request successfully sent ✅. Processing time may vary—please check your e-wallet within 24 hours."),
+              content: Text("Refund request successfully sent ✅. Processing time may vary—please check your e-wallet within 24 hours."),
               duration: Duration(seconds: 6), // Set duration to 5 minutes
             ),
           );
         }
       } else {
-        print(
-            'Failed to cancel transaction. Status code: ${responseTRXEW.statusCode}');
+        print('Failed to cancel transaction. Status code: ${responseTRXEW.statusCode}');
       }
     } catch (err) {
       print('Error during fetch cancel trx: $err');
     }
   }
+  // Function create failed transaction for refund if 255 (for TB Internal use validation) END
 
   Future<void> handleButtonPress({
     required BuildContext context,
@@ -3089,12 +2840,7 @@ class _MyHomePageState extends State<MyHomePage> {
           "devicecode": deviceCode,
           "result": "false",
           "data": [
-            {
-              "referenceid": referenceId,
-              "eamount": selectedAmount,
-              "validityduration": "120",
-              "rssi": "-39"
-            }
+            {"referenceid": referenceId, "eamount": selectedAmount, "validityduration": "120", "rssi": "-39"}
           ]
         };
 
@@ -3104,11 +2850,7 @@ class _MyHomePageState extends State<MyHomePage> {
         // print('request qr');
         final response = await http.post(
           Uri.parse(apiUrl),
-          headers: {
-            'Content-Type': 'application/json',
-            'Token': token,
-            'Signature': signature
-          },
+          headers: {'Content-Type': 'application/json', 'Token': token, 'Signature': signature},
           body: json.encode(payload),
         );
         //
@@ -3221,25 +2963,20 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<List<String>> _loadPresetBackgrounds() async {
     final prefs = await SharedPreferences.getInstance();
     return presetKeys.map((key) {
-      return prefs.getString(key) ??
-          'assets/images/bg${presetKeys.indexOf(key) + 1}.jpg';
+      return prefs.getString(key) ?? 'assets/images/bg${presetKeys.indexOf(key) + 1}.jpg';
     }).toList();
   }
 
-  Future<String?> _uploadImageForSlot(
-      BuildContext context, int slotIndex) async {
-    FilePickerResult? result =
-        await FilePicker.platform.pickFiles(type: FileType.image);
+  Future<String?> _uploadImageForSlot(BuildContext context, int slotIndex) async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.image);
     if (result != null && result.files.single.path != null) {
       String filePath = result.files.single.path!;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(presetKeys[slotIndex], filePath);
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Background ${slotIndex + 1} updated!')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Background ${slotIndex + 1} updated!')));
       return filePath;
     } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('No image selected.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No image selected.')));
       return null;
     }
   }
@@ -3277,8 +3014,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Select Background',
-                              style: Theme.of(context).textTheme.titleLarge),
+                          Text('Select Background', style: Theme.of(context).textTheme.titleLarge),
                           IconButton(
                             icon: Icon(Icons.close),
                             onPressed: () => Navigator.pop(context),
@@ -3291,8 +3027,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     // Scrollable content (background list and reset)
                     Flexible(
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         child: Column(
                           children: [
                             ...List.generate(5, (index) {
@@ -3301,22 +3036,13 @@ class _MyHomePageState extends State<MyHomePage> {
                                 children: [
                                   ListTile(
                                     leading: bgPath.startsWith('assets/')
-                                        ? Image.asset(bgPath,
-                                            width: 50,
-                                            height: 50,
-                                            fit: BoxFit.cover)
-                                        : Image.file(File(bgPath),
-                                            width: 50,
-                                            height: 50,
-                                            fit: BoxFit.cover),
-                                    title: Text(_customNames[index].isEmpty
-                                        ? 'Background ${index + 1}'
-                                        : _customNames[index]),
+                                        ? Image.asset(bgPath, width: 50, height: 50, fit: BoxFit.cover)
+                                        : Image.file(File(bgPath), width: 50, height: 50, fit: BoxFit.cover),
+                                    title: Text(_customNames[index].isEmpty ? 'Background ${index + 1}' : _customNames[index]),
                                     trailing: IconButton(
                                       icon: Icon(Icons.upload_file),
                                       onPressed: () async {
-                                        final path = await _uploadImageForSlot(
-                                            context, index);
+                                        final path = await _uploadImageForSlot(context, index);
                                         if (path != null) {
                                           setState(() {
                                             presetBackgrounds[index] = path;
@@ -3328,26 +3054,20 @@ class _MyHomePageState extends State<MyHomePage> {
                                       setState(() {
                                         _selectedImagePath = bgPath;
                                         _dragOffset = 0.0;
-                                        _backgroundOffsetY =
-                                            0.0; // FINAL position
-                                        _backgroundOffsetX =
-                                            0.0; // FINAL position
-                                        _previewOffsetY =
-                                            0.0; // Used inside dialog
+                                        _backgroundOffsetY = 0.0; // FINAL position
+                                        _backgroundOffsetX = 0.0; // FINAL position
+                                        _previewOffsetY = 0.0; // Used inside dialog
                                         _currentScale = 1.0; // FINAL scale
-                                        _previewScale =
-                                            1.0; // Used inside dialog
+                                        _previewScale = 1.0; // Used inside dialog
                                       });
                                     },
                                   ),
                                   if (_selectedImagePath == bgPath)
                                     Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 16),
+                                      padding: const EdgeInsets.symmetric(horizontal: 16),
                                       child: TextField(
                                         decoration: InputDecoration(
-                                          labelText:
-                                              'Rename Background ${index + 1}',
+                                          labelText: 'Rename Background ${index + 1}',
                                           isDense: true,
                                         ),
                                         controller: TextEditingController(
@@ -3366,13 +3086,10 @@ class _MyHomePageState extends State<MyHomePage> {
                             Divider(),
                             ListTile(
                               leading: Icon(Icons.restore),
-                              title:
-                                  Text('Reset Current Background to Default'),
+                              title: Text('Reset Current Background to Default'),
                               onTap: () async {
-                                final prefs =
-                                    await SharedPreferences.getInstance();
-                                await prefs.setString(
-                                    'background_image', 'assets/images/bg.jpg');
+                                final prefs = await SharedPreferences.getInstance();
+                                await prefs.setString('background_image', 'assets/images/bg.jpg');
 
                                 setState(() {
                                   _backgroundImagePath = 'assets/images/bg.jpg';
@@ -3387,9 +3104,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                 });
                                 Navigator.pop(context);
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content:
-                                          Text('Background reset to default.')),
+                                  SnackBar(content: Text('Background reset to default.')),
                                 );
                               },
                             ),
@@ -3404,14 +3119,10 @@ class _MyHomePageState extends State<MyHomePage> {
                       curve: Curves.easeInOut,
                       child: _selectedImagePath.isNotEmpty
                           ? Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               child: Column(
                                 children: [
-                                  Text("Preview & Adjust",
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium),
+                                  Text("Preview & Adjust", style: Theme.of(context).textTheme.titleMedium),
                                   SizedBox(height: 8),
                                   Container(
                                     height: 500,
@@ -3423,8 +3134,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                       scaleEnabled: true, // allow zooming
                                       minScale: 0.5,
                                       maxScale: 3.0,
-                                      boundaryMargin: EdgeInsets.all(double
-                                          .infinity), // allow full movement
+                                      boundaryMargin: EdgeInsets.all(double.infinity), // allow full movement
                                       child: Container(
                                         height: 500,
                                         width: double.infinity,
@@ -3433,8 +3143,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                         decoration: BoxDecoration(
                                           color: Colors.grey[300],
                                         ),
-                                        child: _selectedImagePath
-                                                .startsWith('assets/')
+                                        child: _selectedImagePath.startsWith('assets/')
                                             ? Image.asset(
                                                 _selectedImagePath,
                                                 fit: BoxFit.fitWidth,
@@ -3479,12 +3188,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
     showDialog(
       context: context,
-      barrierDismissible:
-          false, // Prevents closing the dialog when clicking outside1
+      barrierDismissible: false, // Prevents closing the dialog when clicking outside1
       builder: (context) {
         String contentMessage = "Enter Password";
-        bool isPasswordFieldVisible =
-            true; // Controls whether the password field is visible
+        bool isPasswordFieldVisible = true; // Controls whether the password field is visible
         bool isShowTextVar = false;
 
         return StatefulBuilder(
@@ -3495,9 +3202,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   title: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(isPasswordFieldVisible
-                          ? 'Authentication'
-                          : 'Setting'),
+                      Text(isPasswordFieldVisible ? 'Authentication' : 'Setting'),
                       IconButton(
                         icon: Icon(Icons.close),
                         onPressed: () {
@@ -3541,13 +3246,10 @@ class _MyHomePageState extends State<MyHomePage> {
                                     // Port setting logic
                                   },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors
-                                        .blueAccent, // Set button background color
-                                    minimumSize: Size(120,
-                                        50), // Set button size (width, height)
+                                    backgroundColor: Colors.blueAccent, // Set button background color
+                                    minimumSize: Size(120, 50), // Set button size (width, height)
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(
-                                          12), // Rounded corners
+                                      borderRadius: BorderRadius.circular(12), // Rounded corners
                                     ),
                                   ),
                                   child: Text(
@@ -3555,8 +3257,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                     style: TextStyle(
                                       color: Colors.white, // Text color
                                       fontSize: 16, // Text size
-                                      fontWeight:
-                                          FontWeight.bold, // Text weight
+                                      fontWeight: FontWeight.bold, // Text weight
                                     ),
                                   ),
                                 ),
@@ -3572,13 +3273,10 @@ class _MyHomePageState extends State<MyHomePage> {
                                       _showErrorDialog(); //port recon
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors
-                                          .blueAccent, // Set button background color
-                                      minimumSize: Size(120,
-                                          50), // Set button size (width, height)
+                                      backgroundColor: Colors.blueAccent, // Set button background color
+                                      minimumSize: Size(120, 50), // Set button size (width, height)
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(
-                                            12), // Rounded corners
+                                        borderRadius: BorderRadius.circular(12), // Rounded corners
                                       ),
                                     ),
                                     child: Text(
@@ -3586,8 +3284,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                       style: TextStyle(
                                         color: Colors.white, // Text color
                                         fontSize: 16, // Text size
-                                        fontWeight:
-                                            FontWeight.bold, // Text weight
+                                        fontWeight: FontWeight.bold, // Text weight
                                       ),
                                     ),
                                   ),
@@ -3596,8 +3293,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
                               if (!isShowTextVar)
                                 Positioned(
-                                  top:
-                                      140, // Position it 50 pixels from the top
+                                  top: 140, // Position it 50 pixels from the top
                                   left: 0, // Align to the left
                                   right: 0, // Align to the right
                                   child: ElevatedButton(
@@ -3607,13 +3303,10 @@ class _MyHomePageState extends State<MyHomePage> {
                                       _showDeviceConfigModal(context);
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors
-                                          .blueAccent, // Set button background color
-                                      minimumSize: Size(120,
-                                          50), // Set button size (width, height)
+                                      backgroundColor: Colors.blueAccent, // Set button background color
+                                      minimumSize: Size(120, 50), // Set button size (width, height)
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(
-                                            12), // Rounded corners
+                                        borderRadius: BorderRadius.circular(12), // Rounded corners
                                       ),
                                     ),
                                     child: Text(
@@ -3621,8 +3314,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                       style: TextStyle(
                                         color: Colors.white, // Text color
                                         fontSize: 16, // Text size
-                                        fontWeight:
-                                            FontWeight.bold, // Text weight
+                                        fontWeight: FontWeight.bold, // Text weight
                                       ),
                                     ),
                                   ),
@@ -3630,8 +3322,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
                               if (!isShowTextVar)
                                 Positioned(
-                                  top:
-                                      200, // Position it 50 pixels from the top
+                                  top: 200, // Position it 50 pixels from the top
                                   left: 0, // Align to the left
                                   right: 0, // Align to the right
                                   child: ElevatedButton(
@@ -3640,13 +3331,10 @@ class _MyHomePageState extends State<MyHomePage> {
                                       _showListModal(context);
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors
-                                          .blueAccent, // Set button background color
-                                      minimumSize: Size(120,
-                                          50), // Set button size (width, height)
+                                      backgroundColor: Colors.blueAccent, // Set button background color
+                                      minimumSize: Size(120, 50), // Set button size (width, height)
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(
-                                            12), // Rounded corners
+                                        borderRadius: BorderRadius.circular(12), // Rounded corners
                                       ),
                                     ),
                                     child: Text(
@@ -3654,8 +3342,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                       style: TextStyle(
                                         color: Colors.white, // Text color
                                         fontSize: 16, // Text size
-                                        fontWeight:
-                                            FontWeight.bold, // Text weight
+                                        fontWeight: FontWeight.bold, // Text weight
                                       ),
                                     ),
                                   ),
@@ -3668,8 +3355,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                   right: 0,
                                   child: ElevatedButton(
                                     onPressed: () {
-                                      _showBackgroundImageSettingDialog(
-                                          context);
+                                      _showBackgroundImageSettingDialog(context);
                                     },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.blueAccent,
@@ -3690,8 +3376,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                 ),
                               if (!isShowTextVar)
                                 Positioned(
-                                  top:
-                                      320, // Position it 50 pixels from the top
+                                  top: 320, // Position it 50 pixels from the top
                                   left: 0, // Align to the left
                                   right: 0, // Align to the right
                                   child: ElevatedButton(
@@ -3702,13 +3387,10 @@ class _MyHomePageState extends State<MyHomePage> {
                                       }
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors
-                                          .blueAccent, // Set button background color
-                                      minimumSize: Size(120,
-                                          50), // Set button size (width, height)
+                                      backgroundColor: Colors.blueAccent, // Set button background color
+                                      minimumSize: Size(120, 50), // Set button size (width, height)
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(
-                                            12), // Rounded corners
+                                        borderRadius: BorderRadius.circular(12), // Rounded corners
                                       ),
                                     ),
                                     child: Text(
@@ -3716,8 +3398,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                       style: TextStyle(
                                         color: Colors.white, // Text color
                                         fontSize: 16, // Text size
-                                        fontWeight:
-                                            FontWeight.bold, // Text weight
+                                        fontWeight: FontWeight.bold, // Text weight
                                       ),
                                     ),
                                   ),
@@ -3735,8 +3416,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                       // TextField to input new text
                                       TextField(
                                         controller: _controller,
-                                        maxLines:
-                                            6, // Set to allow 5 lines of text (adjust as needed)
+                                        maxLines: 6, // Set to allow 5 lines of text (adjust as needed)
                                         decoration: InputDecoration(
                                           labelText: 'Enter Text',
                                           border: OutlineInputBorder(),
@@ -3751,36 +3431,28 @@ class _MyHomePageState extends State<MyHomePage> {
                                             setState(() {
                                               isShowTextVar = false;
                                             });
-                                            _saveText(_controller
-                                                .text); // Save the entered text
-                                            _controller
-                                                .clear(); // Clear the TextField
+                                            _saveText(_controller.text); // Save the entered text
+                                            _controller.clear(); // Clear the TextField
                                             _snackBar('Text Saved!');
                                           }
                                         },
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.blueAccent,
                                           shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(12),
                                           ),
-                                          minimumSize: Size(double.infinity,
-                                              50), // Full width, fixed height
+                                          minimumSize: Size(double.infinity, 50), // Full width, fixed height
                                         ),
                                         child: Text(
                                           'Save',
-                                          style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 16),
+                                          style: TextStyle(color: Colors.white, fontSize: 16),
                                         ),
                                       ),
                                     ] else ...[
                                       // Optional content to show when isShowTextVar is false
                                       Text(
                                         '',
-                                        style: TextStyle(
-                                            fontSize: 16,
-                                            fontStyle: FontStyle.italic),
+                                        style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
                                       ),
                                     ],
                                   ],
@@ -3789,39 +3461,27 @@ class _MyHomePageState extends State<MyHomePage> {
 
                               if (!isShowTextVar)
                                 Positioned(
-                                  top:
-                                      375, // Position it 320 pixels from the top
+                                  top: 375, // Position it 320 pixels from the top
                                   left: 0, // Align to the left
                                   right: 0, // Align to the right
                                   child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal:
-                                            20.0), // Add horizontal padding
+                                    padding: const EdgeInsets.symmetric(horizontal: 20.0), // Add horizontal padding
                                     child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          mqttConnected
-                                              ? 'MQTT: Connected'
-                                              : 'MQTT: Disconnected',
+                                          mqttConnected ? 'MQTT: Connected' : 'MQTT: Disconnected',
                                           style: TextStyle(
                                             fontSize: 14.0,
-                                            color:
-                                                Colors.black.withOpacity(0.6),
+                                            color: Colors.black.withOpacity(0.6),
                                           ),
                                         ),
-                                        SizedBox(
-                                            height:
-                                                4.0), // Space between status texts
+                                        SizedBox(height: 4.0), // Space between status texts
                                         Text(
-                                          communication.isConnected
-                                              ? 'Port: Connected'
-                                              : 'Port: Disconnected',
+                                          communication.isConnected ? 'Port: Connected' : 'Port: Disconnected',
                                           style: TextStyle(
                                             fontSize: 14.0,
-                                            color:
-                                                Colors.black.withOpacity(0.6),
+                                            color: Colors.black.withOpacity(0.6),
                                           ),
                                         ),
                                       ],
@@ -3831,13 +3491,11 @@ class _MyHomePageState extends State<MyHomePage> {
                               if (!isShowTextVar)
                                 // Exit App button
                                 Positioned(
-                                  bottom:
-                                      0, // Position it 50 pixels from the bottom
+                                  bottom: 0, // Position it 50 pixels from the bottom
                                   left: 0, // Align to the left
                                   right: 0, // Align to the right
                                   child: SizedBox(
-                                    width: double
-                                        .infinity, // Full width of the parent container
+                                    width: double.infinity, // Full width of the parent container
                                     height: 50, // Fixed height
                                     child: ElevatedButton(
                                       onPressed: () {
@@ -3845,11 +3503,9 @@ class _MyHomePageState extends State<MyHomePage> {
                                         SystemNavigator.pop(); // Exit app
                                       },
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            Colors.red, // Background color
+                                        backgroundColor: Colors.red, // Background color
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                              12), // Rounded corners
+                                          borderRadius: BorderRadius.circular(12), // Rounded corners
                                         ),
                                       ),
                                       child: Text(
@@ -3857,8 +3513,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                         style: TextStyle(
                                           color: Colors.white, // Text color
                                           fontSize: 16, // Text size
-                                          fontWeight:
-                                              FontWeight.bold, // Text weight
+                                          fontWeight: FontWeight.bold, // Text weight
                                         ),
                                       ),
                                     ),
@@ -3875,8 +3530,7 @@ class _MyHomePageState extends State<MyHomePage> {
                             // Correct password, update the dialog content
                             setState(() {
                               isPasswordFieldVisible = false;
-                              contentMessage =
-                                  "Access Granted!"; // Update the message
+                              contentMessage = "Access Granted!"; // Update the message
                             });
                           } else {
                             // Incorrect password
@@ -3884,8 +3538,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               SnackBar(content: Text('Incorrect password')),
                             );
                             setState(() {
-                              contentMessage =
-                                  "Enter Password"; // Reset the message
+                              contentMessage = "Enter Password"; // Reset the message
                               isPasswordFieldVisible = true;
                             });
                           }
@@ -3915,42 +3568,11 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  //after booting
-  void _PortDisconnectDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible:
-          false, // Prevents closing the dialog when clicking outside
-      builder: (context) {
-        return AlertDialog(
-          title: const Text(
-            'Port Disconnected, Please fix and try restart until "Port Connected"',
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min, // Ensures the dialog fits content
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Display error messages with better formatting
-              Text(
-                "Initialize Error: $ErrormsgInitConn\n\nConnection Error: $ErrormsgConn",
-                style: const TextStyle(fontSize: 16),
-              ),
-              const SizedBox(
-                  height: 16), // Add spacing between text and dropdown
-              // Dropdown for selecting available ports
-            ],
-          ),
-        );
-      },
-    );
-  }
-
 //booting
   void _reConnectDialog(BuildContext context) {
     showDialog(
       context: context,
-      barrierDismissible:
-          false, // Prevents closing the dialog when clicking outside
+      barrierDismissible: false, // Prevents closing the dialog when clicking outside
       builder: (context) {
         return AlertDialog(
           title: const Text(
@@ -3965,12 +3587,10 @@ class _MyHomePageState extends State<MyHomePage> {
                 "Initialize Error: $ErrormsgInitConn\n\nConnection Error: $ErrormsgConn",
                 style: const TextStyle(fontSize: 16),
               ),
-              const SizedBox(
-                  height: 16), // Add spacing between text and dropdown
+              const SizedBox(height: 16), // Add spacing between text and dropdown
               // Dropdown for selecting available ports
               DropdownButtonFormField<String>(
-                value: selectedPort
-                    ?.deviceName, // Display the selected device name
+                value: selectedPort?.deviceName, // Display the selected device name
                 hint: const Text("Select a port"),
                 items: myStringArray.map((device) {
                   return DropdownMenuItem<String>(
@@ -3983,8 +3603,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     // Update the selected port
                     selectedPort = myStringArray.firstWhere(
                       (device) => device.deviceName == newPort,
-                      orElse: () => null
-                          as UsbDevice, // Return null if no matching device is found
+                      orElse: () => null as UsbDevice, // Return null if no matching device is found
                     );
                     print("Selected Port: ${selectedPort?.deviceName}");
                   });
@@ -4003,8 +3622,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 } else {
                   // Show a warning if no port is selected
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text("Please select a valid port.")),
+                    const SnackBar(content: Text("Please select a valid port.")),
                   );
                 }
               },
@@ -4035,8 +3653,7 @@ class _MyHomePageState extends State<MyHomePage> {
           });
         } else {
           timer.cancel();
-          Navigator.of(context)
-              .pop(); // Close the modal when countdown reaches 0
+          Navigator.of(context).pop(); // Close the modal when countdown reaches 0
 
           cancelFetchTRX("Qr timeout");
         }
@@ -4047,11 +3664,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
     showDialog(
       context: context,
-      barrierDismissible:
-          false, // Prevents closing the dialog when clicking outside
+      barrierDismissible: false, // Prevents closing the dialog when clicking outside
       builder: (BuildContext context) {
-        double screenWidth =
-            MediaQuery.of(context).size.width; // Get screen width
+        double screenWidth = MediaQuery.of(context).size.width; // Get screen width
         double screenHeight = MediaQuery.of(context).size.height;
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
@@ -4066,8 +3681,7 @@ class _MyHomePageState extends State<MyHomePage> {
             }
 
             return AlertDialog(
-              insetPadding:
-                  const EdgeInsets.symmetric(horizontal: 40, vertical: 130),
+              insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 130),
               contentPadding: EdgeInsets.zero,
               titlePadding: EdgeInsets.zero,
               shape: RoundedRectangleBorder(
@@ -4179,21 +3793,15 @@ class _MyHomePageState extends State<MyHomePage> {
                       left: 0,
                       right: 0,
                       child: Padding(
-                        padding: const EdgeInsets.all(
-                            15.0), // Adjust the margin around the image
+                        padding: const EdgeInsets.all(15.0), // Adjust the margin around the image
                         child: Align(
-                          alignment: Alignment
-                              .bottomCenter, // Align the image to the bottom and center
+                          alignment: Alignment.bottomCenter, // Align the image to the bottom and center
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              SizedBox(
-                                  height:
-                                      30), // You can adjust the height as needed
+                              SizedBox(height: 30), // You can adjust the height as needed
                               Container(
-                                margin: const EdgeInsets.only(
-                                    bottom:
-                                        5.0), // Extra margin from the bottom if needed
+                                margin: const EdgeInsets.only(bottom: 5.0), // Extra margin from the bottom if needed
                                 child: Text(
                                   qrCompanyname,
                                   style: TextStyle(
@@ -4206,37 +3814,28 @@ class _MyHomePageState extends State<MyHomePage> {
                               ),
                               // QR code container
                               Container(
-                                margin: const EdgeInsets.only(
-                                    bottom:
-                                        40.0), // Extra margin from the bottom if needed
+                                margin: const EdgeInsets.only(bottom: 40.0), // Extra margin from the bottom if needed
                                 decoration: BoxDecoration(
                                   border: Border.all(
-                                    color: const Color(
-                                        0xFFE52561), // Border color (same pinkish-red color)
+                                    color: const Color(0xFFE52561), // Border color (same pinkish-red color)
                                     width: 10.0, // Border width
                                   ),
-                                  borderRadius: BorderRadius.circular(
-                                      8.0), // Optional: Rounded corners
+                                  borderRadius: BorderRadius.circular(8.0), // Optional: Rounded corners
                                 ),
-                                padding: const EdgeInsets.all(
-                                    8.0), // Optional: Padding inside the border
+                                padding: const EdgeInsets.all(8.0), // Optional: Padding inside the border
                                 child: qrCodeImageUrl != null
                                     ? QrImageView(
-                                        data: qrCodeImageUrl ??
-                                            'default_fallback_value',
+                                        data: qrCodeImageUrl ?? 'default_fallback_value',
                                         version: QrVersions.auto,
                                         size: 530,
                                         gapless: false,
-                                        foregroundColor: const Color(
-                                            0xFFE52561), // QR code color
+                                        foregroundColor: const Color(0xFFE52561), // QR code color
                                       )
                                     : Column(children: [
                                         Image.asset(
                                           'assets/images/errorpage.png', // Replace with your image path
-                                          height:
-                                              525, // Adjust dynamically based on screen height
-                                          width:
-                                              500, // Center the image and set the width
+                                          height: 525, // Adjust dynamically based on screen height
+                                          width: 500, // Center the image and set the width
                                         ),
                                         Text(
                                           Errormsg,
@@ -4252,19 +3851,13 @@ class _MyHomePageState extends State<MyHomePage> {
 
                               // Rectangle with "Scan code to pay"
                               Transform.translate(
-                                offset: const Offset(0,
-                                    -30), // Move the container 10 units up (negative Y value)
+                                offset: const Offset(0, -30), // Move the container 10 units up (negative Y value)
                                 child: Container(
                                   width: 575, // Adjust width
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 10.0,
-                                      horizontal:
-                                          18.0), // Reduce left and right padding to 20
+                                  padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 18.0), // Reduce left and right padding to 20
                                   decoration: BoxDecoration(
-                                    color: const Color(
-                                        0xFFE52561), // Pinkish red background
-                                    borderRadius: BorderRadius.circular(
-                                        8.0), // Optional: Rounded corners
+                                    color: const Color(0xFFE52561), // Pinkish red background
+                                    borderRadius: BorderRadius.circular(8.0), // Optional: Rounded corners
                                   ),
                                   child: Text(
                                     'Scan code to pay',
@@ -4281,8 +3874,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               // Row of 3 small logos
 
                               Transform.translate(
-                                offset: const Offset(0,
-                                    10), // Move the Row 10 units up (negative Y value)
+                                offset: const Offset(0, 10), // Move the Row 10 units up (negative Y value)
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
@@ -4291,18 +3883,6 @@ class _MyHomePageState extends State<MyHomePage> {
                                       height: 300.0, // Small size for the logos
                                       width: 525.0,
                                     ),
-                                    // SizedBox(width: 10.0), // Space between logos
-                                    // Image.asset(
-                                    //   'assets/images/grabpaylogo.png', // Replace with logo 2 image path
-                                    //   height: 40.0,
-                                    //   width: 40.0,
-                                    // ),
-                                    // SizedBox(width: 10.0),
-                                    // Image.asset(
-                                    //   'assets/images/boostlogo.png', // Replace with logo 3 image path
-                                    //   height: 40.0,
-                                    //   width: 40.0,
-                                    // ),
                                   ],
                                 ),
                               )
@@ -4477,13 +4057,10 @@ class _MyHomePageState extends State<MyHomePage> {
             right: 0,
             child: Transform(
               transform: Matrix4.identity()
-                ..translate(_backgroundOffsetX,
-                    _backgroundOffsetY) // Apply both X and Y offsets
+                ..translate(_backgroundOffsetX, _backgroundOffsetY) // Apply both X and Y offsets
                 ..scale(_currentScale),
               alignment: Alignment.topCenter,
-              child: _selectedImagePath.startsWith('assets/')
-                  ? Image.asset(_selectedImagePath, fit: BoxFit.cover)
-                  : Image.file(File(_selectedImagePath), fit: BoxFit.cover),
+              child: _selectedImagePath.startsWith('assets/') ? Image.asset(_selectedImagePath, fit: BoxFit.cover) : Image.file(File(_selectedImagePath), fit: BoxFit.cover),
             ),
           ),
 
@@ -4494,10 +4071,8 @@ class _MyHomePageState extends State<MyHomePage> {
             right: 0,
             child: Container(
               width: screenWidth,
-              height:
-                  screenHeight * 0.7, // Adjusted to take the remaining space
-              padding:
-                  const EdgeInsets.all(10.0), // Padding inside the container
+              height: screenHeight * 0.7, // Adjusted to take the remaining space
+              padding: const EdgeInsets.all(10.0), // Padding inside the container
               margin: const EdgeInsets.all(1.0), // Margin around the container
               decoration: BoxDecoration(
                 color: Colors.white, // Background color
@@ -4505,11 +4080,9 @@ class _MyHomePageState extends State<MyHomePage> {
                 boxShadow: const [
                   BoxShadow(
                     color: Colors.black45, // Shadow color
-                    offset: Offset(0,
-                        0), // No offset, so the shadow is centered around the widget
+                    offset: Offset(0, 0), // No offset, so the shadow is centered around the widget
                     blurRadius: 0.5, // Blur radius to make the shadow smooth
-                    spreadRadius:
-                        0.5, // Optional: Adds a bit of spread to make the shadow larger
+                    spreadRadius: 0.5, // Optional: Adds a bit of spread to make the shadow larger
                   )
                 ],
               ),
@@ -4535,9 +4108,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       fontFamily: 'Arial', // Apply Arial-like font
                     ),
                   ),
-                  const SizedBox(
-                      height:
-                          30), // Add space between description and content below
+                  const SizedBox(height: 30), // Add space between description and content below
                   Center(
                       child: Wrap(
                     spacing: 16,
@@ -4556,10 +4127,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       }).toList(),
 
                       // Bonus Coins
-                      ...coinPriceListBonus
-                          .where((item) =>
-                              item['coins']! > 0 && item['price']! > 0)
-                          .map((item) {
+                      ...coinPriceListBonus.where((item) => item['coins']! > 0 && item['price']! > 0).map((item) {
                         String amount = item['price']!.toStringAsFixed(2);
                         return _buildCoinButton(
                           context: context,
@@ -4573,17 +4141,11 @@ class _MyHomePageState extends State<MyHomePage> {
                       }).toList(),
                     ],
                   )),
-                  const SizedBox(
-                      height:
-                          15), // Add space between description and content below
+                  const SizedBox(height: 15), // Add space between description and content below
                   Center(
                     child: Column(
-                      children: coinPriceListNonQr
-                          .where((item) =>
-                              item['coins']! > 0 && item['price']! > 0)
-                          .map((item) {
-                        String amount = item['price']!
-                            .toStringAsFixed(2); // Ensure correct format
+                      children: coinPriceListNonQr.where((item) => item['coins']! > 0 && item['price']! > 0).map((item) {
+                        String amount = item['price']!.toStringAsFixed(2); // Ensure correct format
 
                         return _buildCoinButton(
                             context: context,
@@ -4642,30 +4204,6 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ),
 
-          // Positioned(
-          //   bottom: 20.0, // Adjust the position as needed
-          //   left: 0,
-          //   right: 0,
-          //   child: Center( // This will center the child within the Positioned widget
-          //     child:
-          //     Column(
-          //       mainAxisAlignment: MainAxisAlignment.center,
-          //       children: [
-          //         Text(
-          //           "Powered by",
-          //           style: TextStyle(fontSize: 24),
-          //         ),
-          //         Image.asset(
-          //           'assets/images/logo-tb.png', // Replace with your image path
-          //           width: 150.0, // Adjust the size of the image
-          //           height: 60.0,
-          //         ),
-          //
-          //       ],
-          //     ),
-          //   ),
-          // ),
-
           Stack(
             children: [
               Positioned(
@@ -4682,14 +4220,11 @@ class _MyHomePageState extends State<MyHomePage> {
                         children: [
                           TextSpan(
                             text: '$machineId ',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black), // Bold text
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black), // Bold text
                           ),
                           TextSpan(
                             text: 'V$currentVersion',
-                            style:
-                                TextStyle(color: Colors.black), // Colored text
+                            style: TextStyle(color: Colors.black), // Colored text
                           ),
                         ],
                       ),
@@ -4711,13 +4246,10 @@ class _MyHomePageState extends State<MyHomePage> {
                           height: 30.0, // Circle height
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: (isConnected ? Colors.green : Colors.red)
-                                .withOpacity(0.6), // Add opacity
+                            color: (isConnected ? Colors.green : Colors.red).withOpacity(0.6), // Add opacity
                           ),
                         ),
-                        SizedBox(
-                            width:
-                                8.0), // Add some spacing between the circle and the text
+                        SizedBox(width: 8.0), // Add some spacing between the circle and the text
                         Text(
                           isConnected ? 'Online' : 'Offline',
                           style: TextStyle(
@@ -4736,41 +4268,29 @@ class _MyHomePageState extends State<MyHomePage> {
           // Loading overlay
           if (ReceivedPayment)
             Container(
-              color:
-                  Colors.black.withOpacity(0.5), // Semi-transparent background
+              color: Colors.black.withOpacity(0.5), // Semi-transparent background
               child: Center(
                 child: Container(
-                  padding:
-                      const EdgeInsets.all(20), // Add padding inside the box
+                  padding: const EdgeInsets.all(20), // Add padding inside the box
                   decoration: BoxDecoration(
                     color: Colors.white, // White background for the box
                     borderRadius: BorderRadius.circular(12), // Rounded corners
                   ),
                   child: Column(
-                    mainAxisSize: MainAxisSize
-                        .min, // Ensures the content takes minimum space
-                    crossAxisAlignment: CrossAxisAlignment
-                        .center, // Center the content horizontally
+                    mainAxisSize: MainAxisSize.min, // Ensures the content takes minimum space
+                    crossAxisAlignment: CrossAxisAlignment.center, // Center the content horizontally
                     children: [
                       // Use AnimatedOpacity to animate the checkmark icon
                       AnimatedOpacity(
                         opacity: ReceivedPayment ? 1.0 : 0,
-                        duration: const Duration(
-                            milliseconds: 1000), // Animation duration
+                        duration: const Duration(milliseconds: 1000), // Animation duration
                         child: Icon(
-                          CompletedDispense == false && FailedDispense == true
-                              ? Icons.cancel
-                              : Icons.check_circle_outline,
-                          color: CompletedDispense == false &&
-                                  FailedDispense == true
-                              ? Colors.red
-                              : Colors.green, // Green color for success
+                          CompletedDispense == false && FailedDispense == true ? Icons.cancel : Icons.check_circle_outline,
+                          color: CompletedDispense == false && FailedDispense == true ? Colors.red : Colors.green, // Green color for success
                           size: 50, // Icon size
                         ),
                       ),
-                      const SizedBox(
-                          height:
-                              32), // Space between the progress indicator and text
+                      const SizedBox(height: 32), // Space between the progress indicator and text
                       if (CompletedDispense == false && FailedDispense == false)
                         const Text(
                           'Payment Received',
@@ -4780,9 +4300,7 @@ class _MyHomePageState extends State<MyHomePage> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      const SizedBox(
-                          height:
-                              16), // Space between the progress indicator and text
+                      const SizedBox(height: 16), // Space between the progress indicator and text
                       if (CompletedDispense == false && FailedDispense == false)
                         Text(
                           'Please wait, Dispensing token... \nRemaining Token : $remainingTodispenseAm',
@@ -4817,29 +4335,22 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           if (isLoading)
             Container(
-              color:
-                  Colors.black.withOpacity(0.5), // Semi-transparent background
+              color: Colors.black.withOpacity(0.5), // Semi-transparent background
               child: Center(
                 child: Container(
-                  padding:
-                      const EdgeInsets.all(20), // Add padding inside the box
+                  padding: const EdgeInsets.all(20), // Add padding inside the box
                   decoration: BoxDecoration(
                     color: Colors.white, // White background for the box
                     borderRadius: BorderRadius.circular(12), // Rounded corners
                   ),
                   child: Column(
-                    mainAxisSize: MainAxisSize
-                        .min, // Ensures the content takes minimum space
-                    crossAxisAlignment: CrossAxisAlignment
-                        .center, // Center the content horizontally
+                    mainAxisSize: MainAxisSize.min, // Ensures the content takes minimum space
+                    crossAxisAlignment: CrossAxisAlignment.center, // Center the content horizontally
                     children: [
                       CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.blue), // You can change the color
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.blue), // You can change the color
                       ),
-                      const SizedBox(
-                          height:
-                              16), // Space between the progress indicator and text
+                      const SizedBox(height: 16), // Space between the progress indicator and text
                       const Text(
                         'Please wait, generating QR code...',
                         style: TextStyle(
@@ -4853,75 +4364,26 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
               ),
             ),
-          //general loading
-          // if (isGeneralLoading)
-          //   Stack(
-          //     children: [
-          //       // Your main UI
-          //       Positioned.fill(
-          //         child: Container(
-          //           color: Colors.black
-          //               .withOpacity(0.5), // Semi-transparent background
-          //           child: Center(
-          //             child: Container(
-          //               padding: const EdgeInsets.all(20),
-          //               decoration: BoxDecoration(
-          //                 color: Colors.white,
-          //                 borderRadius: BorderRadius.circular(12),
-          //               ),
-          //               child: Column(
-          //                 mainAxisSize: MainAxisSize.min,
-          //                 crossAxisAlignment: CrossAxisAlignment.center,
-          //                 children: [
-          //                   CircularProgressIndicator(
-          //                     valueColor:
-          //                         AlwaysStoppedAnimation<Color>(Colors.blue),
-          //                   ),
-          //                   const SizedBox(height: 16),
-          //                   const Text(
-          //                     'Loading...',
-          //                     style: TextStyle(
-          //                       color: Colors.black,
-          //                       fontSize: 32,
-          //                       fontWeight: FontWeight.bold,
-          //                     ),
-          //                   ),
-          //                 ],
-          //               ),
-          //             ),
-          //           ),
-          //         ),
-          //       ),
-          //     ],
-          //   ),
 
           if (isLoadingboot)
             Positioned.fill(
               child: Container(
-                color: Colors.black
-                    .withOpacity(0.5), // Semi-transparent background
+                color: Colors.black.withOpacity(0.5), // Semi-transparent background
                 child: Center(
                   child: Container(
-                    padding:
-                        const EdgeInsets.all(20), // Add padding inside the box
+                    padding: const EdgeInsets.all(20), // Add padding inside the box
                     decoration: BoxDecoration(
                       color: Colors.white, // White background for the box
-                      borderRadius:
-                          BorderRadius.circular(12), // Rounded corners
+                      borderRadius: BorderRadius.circular(12), // Rounded corners
                     ),
                     child: Column(
-                      mainAxisSize: MainAxisSize
-                          .min, // Ensures the content takes minimum space
-                      crossAxisAlignment: CrossAxisAlignment
-                          .center, // Center the content horizontally
+                      mainAxisSize: MainAxisSize.min, // Ensures the content takes minimum space
+                      crossAxisAlignment: CrossAxisAlignment.center, // Center the content horizontally
                       children: [
                         CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.blue), // You can change the color
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue), // You can change the color
                         ),
-                        const SizedBox(
-                            height:
-                                16), // Space between the progress indicator and text
+                        const SizedBox(height: 16), // Space between the progress indicator and text
                         const Text(
                           'Please wait, Connecting port...',
                           style: TextStyle(
@@ -4937,67 +4399,9 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
 
-          // if (isConnected)
-          //   Container(
-          //     color:
-          //     Colors.black.withOpacity(0.5), // Semi-transparent background
-          //     child: Center(
-          //       child: Container(
-          //         padding: const EdgeInsets.all(20), // Padding inside the box
-          //         decoration: BoxDecoration(
-          //           color: Colors.white, // White background
-          //           borderRadius: BorderRadius.circular(12), // Rounded corners
-          //         ),
-          //         child: Column(
-          //           mainAxisSize: MainAxisSize.min, // Minimum space taken
-          //           crossAxisAlignment:
-          //           CrossAxisAlignment.center, // Center content
-          //           children: [
-          //             Icon(
-          //               Icons.cancel,
-          //               color: Colors.red,
-          //               size: 50, // Icon size
-          //             ),
-          //             const SizedBox(height: 16), // Space between icon and text
-          //             SizedBox(
-          //               width: 550, // Forces text to take full width
-          //               child: Text(
-          //                'No connection',
-          //                 textAlign:
-          //                 TextAlign.center, // Ensure text is centered
-          //                 style: TextStyle(
-          //                   color: Colors.black,
-          //                   fontSize: 32,
-          //                   fontWeight: FontWeight.bold,
-          //                 ),
-          //               ),
-          //
-          //               // The button is centered by default since the Column is centered.
-          //             ),
-          //             Text(
-          //               'Please make sure that you are connected',
-          //               textAlign: TextAlign.center, // Ensure text is centered
-          //               style: TextStyle(
-          //                 color: Colors.yellow,
-          //                 fontSize: 32,
-          //                 fontWeight: FontWeight.bold,
-          //               ),
-          //             ),
-          //             const SizedBox(height: 16), // Space between icon and text
-          //             ElevatedButton(
-          //               onPressed: () =>   Navigator.pop(context),
-          //               child: const Text('Okay'),
-          //             ),
-          //           ],
-          //         ),
-          //       ),
-          //     ),
-          //   ),
-
           if (isLatestSoldout)
             Container(
-              color:
-                  Colors.black.withOpacity(0.5), // Semi-transparent background
+              color: Colors.black.withOpacity(0.5), // Semi-transparent background
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.all(20), // Padding inside the box
@@ -5007,8 +4411,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min, // Minimum space taken
-                    crossAxisAlignment:
-                        CrossAxisAlignment.center, // Center content
+                    crossAxisAlignment: CrossAxisAlignment.center, // Center content
                     children: [
                       Icon(
                         Icons.cancel,
@@ -5019,11 +4422,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       SizedBox(
                         width: 550, // Forces text to take full width
                         child: Text(
-                          remainingTodispenseAm == 0
-                              ? 'Please wait,\nEnsure the token is filled!'
-                              : 'Please wait,\nEnsure the token is filled!\nRemaining Token: $remainingTodispenseAm',
-                          textAlign:
-                              TextAlign.center, // Ensure text is centered
+                          remainingTodispenseAm == 0 ? 'Please wait,\nEnsure the token is filled!' : 'Please wait,\nEnsure the token is filled!\nRemaining Token: $remainingTodispenseAm',
+                          textAlign: TextAlign.center, // Ensure text is centered
                           style: TextStyle(
                             color: Colors.black,
                             fontSize: 32,
@@ -5055,8 +4455,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
           if (communication.IsPCBAlive == false)
             Container(
-              color:
-                  Colors.black.withOpacity(0.5), // Semi-transparent background
+              color: Colors.black.withOpacity(0.5), // Semi-transparent background
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.all(20), // Padding inside the box
@@ -5066,8 +4465,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min, // Minimum space taken
-                    crossAxisAlignment:
-                        CrossAxisAlignment.center, // Center content
+                    crossAxisAlignment: CrossAxisAlignment.center, // Center content
                     children: [
                       Icon(
                         Icons.cancel,
@@ -5095,8 +4493,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
           if (isDeviceFaulty || communication.isSoldOut)
             Container(
-              color:
-                  Colors.black.withOpacity(0.5), // Semi-transparent background
+              color: Colors.black.withOpacity(0.5), // Semi-transparent background
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.all(20), // Padding inside the box
@@ -5106,8 +4503,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min, // Minimum space taken
-                    crossAxisAlignment:
-                        CrossAxisAlignment.center, // Center content
+                    crossAxisAlignment: CrossAxisAlignment.center, // Center content
                     children: [
                       Icon(
                         Icons.cancel,
